@@ -31,6 +31,8 @@ __ensime-mode__
 Download the latest ENSIME distribution from the github [downloads page](http://github.com/aemoncannon/ensime/downloads). Unpack the ENSIME distribution into a directory of your choosing. 
 
 Add the following lines to your .emacs file:
+
+    (setq ensime-default-server-root "/path/to/ensime/home" )
     (require 'scala-mode)
     (add-to-list 'auto-mode-alist '("\\.scala$" . scala-mode))
     (add-to-list 'load-path "ENSIME_ROOT/elisp/")

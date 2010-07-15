@@ -1,9 +1,11 @@
 (
 
- ;; The root of your ENSIME distribution.
+ ;; Where you unpacked the ENSIME distribution.
+ ;; note: You should set ensime-default-server-root once in your ~/.emacs file instead
+ ;; eg (setq ensime-default-server-root "/path/to/ensime/home" )
  ;; ------------------------------------------
- :server-root 
- "/home/aemon/src/misc/ensime/dist"
+ ;; :server-root 
+ ;; "/home/aemon/src/misc/ensime/dist"
 
  ;; The command with which to invoke the ENSIME server. By default, 
  ;; this will be set to "bin/server.sh" on Unix systems and 
