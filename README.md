@@ -1,3 +1,9 @@
+# BIG FAT WARNING
+This branch is a work branch only. I'm going to rebease it.
+So don't base your work on it. I try to feed all changes upstream.
+Contact me if you want to force the process of feeding upstream
+
+
 # ENSIME
 the ENhanced Scala Interaction Mode for Emacs
 
