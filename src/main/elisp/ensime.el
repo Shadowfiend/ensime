@@ -2687,6 +2687,21 @@ PROP is the name of a text property."
   (if (fboundp 'ensime-test-sig)
       (ensime-test-sig event value)))
 
+;; helper opening README
+(defun ensime-show-README () (interactive)
+  "show ensime README file which serves as Ensime documentation"
+   (find-file
+     (concat
+       (replace-regexp-in-string
+	  ;; drop [src/main/]elisp/ensime.el
+          ;; should work for .git installs and dist installs
+         "\\(?:src[/\\]main[/\\]\\)?elisp[/\\]ensime.el$"
+         ""
+         (locate-library "ensime.el")
+         )
+       "README.md"))
+    (toggle-read-only))
+;; Testing helpers
 
 
 (provide 'ensime)

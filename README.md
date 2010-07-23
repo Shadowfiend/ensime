@@ -95,6 +95,7 @@ __C-c c__  - Type-check the current file.
 __C-c a__  - Type-check all files in the project.
 
 
+m-x ensime-show-README - open this README file in Emacs
 
 
 
