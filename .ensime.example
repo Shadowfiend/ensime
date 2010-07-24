@@ -7,13 +7,6 @@
  ;; :server-root 
  ;; "/home/aemon/src/misc/ensime/dist"
 
- ;; The command with which to invoke the ENSIME server. By default, 
- ;; this will be set to "bin/server.sh" on Unix systems and 
- ;; "bin/server.bat" on Windows.
- ;; ---------------------------------
- ;; :server-cmd  "bin/server.sh"
-
-
  ;; The host to connect to. Connecting to remote ENSIME servers is not
  ;; currently supported.
  ;; ------------------------------

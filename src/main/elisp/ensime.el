@@ -108,13 +108,8 @@
   :type 'integer
   :group 'ensime-server)
 
-(defcustom ensime-default-server-cmd 
-  (if (eq system-type 'windows-nt)  "bin/server.bat" "bin/server.sh")
-  "Command to launch server process."
-  :type 'string
-  :group 'ensime-server)
-
-(defcustom ensime-default-server-root "/home/aemon/src/misc/ensime/dist"
+;; should be set in your ~/.emacs or project file
+(defcustom ensime-default-server-root nil
   "Location of ENSIME server library."
   :type 'string
   :group 'ensime-server)
@@ -342,8 +337,7 @@
   (when (not ensime-mode) 
     (ensime-mode 1))
   (let* ((config (ensime-config-find-and-load))
-	 (cmd (or (plist-get config :server-cmd) 
-		  ensime-default-server-cmd))
+	 (cmd (if (eq system-type 'windows-nt)  "bin/server.bat" "bin/server.sh"))
 	 (env (plist-get config :server-env))
 	 (dir (or (plist-get config :server-root)
 		  ensime-default-server-root))
@@ -356,7 +350,7 @@
 				  (expand-file-name dir)) 
 				 cmd)))
 
-	(message "Oops! The command '%s' in your config file does not seem to have execute permissions." cmd)
+	(message "Oops! The command '%s' does not seem to have execute permissions (or does not exist).\nUse chmod a+x '%s';" cmd cmd)
 
       (progn
 	(ensime-delete-swank-port-file 'quiet)
