@@ -213,7 +213,7 @@
   "Search up the directory tree starting at file-name 
    for a suitable config file to load, return it's path. Return nil if 
    no such file found."
-  (let* ((dir (file-name-directory file-name))
+  (let* ((dir (if file-name (file-name-directory file-name) default-directory))
 	 (possible-path (concat dir ensime-config-file-name)))
     (if (file-directory-p dir)
 	(if (file-exists-p possible-path)
