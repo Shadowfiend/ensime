@@ -1,0 +1,6 @@
+From: Marc Weber <marco-oweber@gmx.de>
+Subject: [PATCH] t/bash-to-sh
+
+/bin/sh is sufficient in server.sh script
+
+Signed-off-by: Marc Weber <marco-oweber@gmx.de>
