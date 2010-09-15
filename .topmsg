@@ -1,7 +1,7 @@
 From: Marc Weber <marco-oweber@gmx.de>
 Subject: [PATCH] t/find-server-by-elisp-path
 
-specifying the server location is awkward.
-It can be found by taking a path relative to the elisp files
+determine ensime-default-server-root automatically.
+As side effect ensime-default-server-cmd can be omitted always
 
 Signed-off-by: Marc Weber <marco-oweber@gmx.de>
