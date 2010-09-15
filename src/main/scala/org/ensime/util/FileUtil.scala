@@ -4,22 +4,18 @@ import java.io._
 import java.nio.channels.FileChannel
 import java.nio.charset.Charset
 import scala.collection.Seq
-
+import scala.collection.mutable
 
 // This routine stolen from http://rosettacode.org/wiki/Walk_a_directory/Recursively#Scala
 
-
-/** A wrapper around file, allowing iteration either on direct children 
-or on directory tree */
+/** A wrapper around file, allowing iteration either on direct children or on directory tree */
 class RichFile(file: File) {
-  
+
   def children = new Iterable[File] {
-    override def iterator = (
-      if (file.isDirectory) file.listFiles.iterator else Iterator.empty)
+    override def iterator = (if (file.isDirectory) file.listFiles.iterator else Iterator.empty)
   }
-  
-  def andTree : Iterable[File] = (
-    Seq(file) ++ children.flatMap(child => new RichFile(child).andTree))
+
+  def andTree: Iterable[File] = (Seq(file) ++ children.flatMap(child => new RichFile(child).andTree))
 
 }
 
@@ -28,82 +24,143 @@ object RichFile {
   implicit def toRichFile(file: File) = new RichFile(file)
 }
 
+class CanonFile private (path: String) extends File(path) {}
+
+object CanonFile {
+  def apply(file: File) = {
+    try {
+      new CanonFile(file.getCanonicalPath)
+    } catch {
+      case e: Exception => new CanonFile(file.getAbsolutePath)
+    }
+  }
+}
+
 object FileUtils {
-  
+
   implicit def toRichFile(file: File) = new RichFile(file)
 
-  def expandRecursively(rootDir:File, fileList:Iterable[File], isValid:(File => Boolean)):Set[File] = {
-    (for(f <- fileList;
-	val files = if(f.isAbsolute) f.andTree else (new File(rootDir, f.getPath)).andTree;
-	file <- files if isValid(file)
-      )
-      yield{ file }).toSet
+  implicit def toCanonFile(file: File): CanonFile = CanonFile(file)
+
+  def expandRecursively(rootDir: File, fileList: Iterable[File], isValid: (File => Boolean)): Set[CanonFile] = {
+    (for (
+      f <- fileList;
+      val files = if (f.isAbsolute) f.andTree else (new File(rootDir, f.getPath)).andTree;
+      file <- files if isValid(file)
+    ) yield { toCanonFile(file) }).toSet
   }
 
-  def expand(rootDir:File, fileList:Iterable[File], isValid:(File => Boolean)):Set[File] = {
-    (for(f <- fileList;
-	val files = List(if(f.isAbsolute) f else (new File(rootDir, f.getPath)));
-	file <- files if isValid(file)
-      )
-      yield{
-	file
-      }).toSet
+  def expand(rootDir: File, fileList: Iterable[File], isValid: (File => Boolean)): Set[CanonFile] = {
+    (for (
+      f <- fileList;
+      val files = List(if (f.isAbsolute) f else (new File(rootDir, f.getPath)));
+      file <- files if isValid(file)
+    ) yield {
+      toCanonFile(file)
+    }).toSet
   }
 
-  def maybeDirs(names:Iterable[String], baseDir:File):Iterable[File] = {
-    names.map{s => maybeDir(s,baseDir)}.flatten
+  def maybeDirs(names: Iterable[String], baseDir: File): Iterable[CanonFile] = {
+    names.map { s => maybeDir(s, baseDir) }.flatten
   }
 
-  def maybeFiles(names:Iterable[String], baseDir:File):Iterable[File] = {
-    names.map{s => maybeFile(s,baseDir)}.flatten
+  def maybeFiles(names: Iterable[String], baseDir: File): Iterable[CanonFile] = {
+    names.map { s => maybeFile(s, baseDir) }.flatten
   }
 
-  def maybeFile(s:String, baseDir:File):Option[File] = { 
+  def maybeFile(s: String, baseDir: File): Option[CanonFile] = {
     val f = new File(s)
-    if(f.isAbsolute) Some(f)
-    else Some(new File(baseDir, s))
-  }.filter( f => f.exists)
+    if (f.isAbsolute) Some(toCanonFile(f))
+    else Some(toCanonFile(new File(baseDir, s)))
+  }.filter(f => f.exists)
 
-  def maybeDir(s:String, baseDir:File):Option[File] = { 
+  def maybeDir(s: String, baseDir: File): Option[CanonFile] = {
     maybeFile(s, baseDir).filter(_.isDirectory)
   }
 
-
-  def isValidJar(f:File):Boolean = f.exists && f.getName.endsWith(".jar")
-  def isValidClassDir(f:File):Boolean = f.exists && f.isDirectory
-  def isValidSourceFile(f:File):Boolean = {
+  def isValidJar(f: File): Boolean = f.exists && f.getName.endsWith(".jar")
+  def isValidClassDir(f: File): Boolean = f.exists && f.isDirectory
+  def isValidSourceFile(f: File): Boolean = {
     f.exists && !f.isHidden && (f.getName.endsWith(".scala") || f.getName.endsWith(".java"))
   }
 
-  def readFile(file:File):Either[IOException, String] = {
+  def readFile(file: File): Either[IOException, String] = {
+    val cs = Charset.defaultCharset()
     try {
-      val stream = new FileInputStream(file);
-      val fc = stream.getChannel();
-      val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
-      /* Instead of using default, pass in a decoder. */
-      Right(Charset.defaultCharset().decode(bb).toString())
-    }
-    catch{
-      case e:IOException => Left(e)
+      val stream = new FileInputStream(file)
+      try {
+        val reader = new BufferedReader(new InputStreamReader(stream, cs))
+        val builder = new StringBuilder()
+        val buffer = new Array[Char](8192)
+        var read = reader.read(buffer, 0, buffer.length)
+        while (read > 0) {
+          builder.appendAll(buffer, 0, read)
+          read = reader.read(buffer, 0, buffer.length)
+        }
+        Right(builder.toString())
+      } catch {
+        case e: IOException => Left(e)
+      }
+      finally {
+        stream.close()
+      }
+    } catch {
+      case e: FileNotFoundException => Left(e)
     }
   }
 
-  def replaceFileContents(file:File, newContents:String):Either[IOException, Boolean] = {
+  def replaceFileContents(file: File, newContents: String): Either[Exception, Unit] = {
     try {
       val writer = new FileWriter(file, false)
-      writer.write(newContents)
-      writer.close()
-      Right(true)
-    }
-    catch{
-      case e:IOException => Left(e)
+      try {
+        writer.write(newContents)
+        Right(())
+      } catch {
+        case e: IOException => Left(e)
+      }
+      finally {
+        writer.close()
+      }
+    } catch {
+      case e: Exception => Left(e)
     }
   }
 
+  /**
+   * For each (f,s) pair, replace the contents of f with s. If any errors occurs
+   * before any disk writes, return Left(exception). If  an error occurs DURING
+   * disk writes, return Right(Left(exception)). Otherwise, return Right(Right(()))
+   */
+  def rewriteFiles(changes: Iterable[(File, String)]): Either[Exception, Either[Exception, Unit]] = {
+    val touchedFiles = new mutable.ListBuffer[File]
+    try {
 
+      // Try to fail fast, before writing anything to disk.
+      changes.foreach {
+        case (f: File, s: String) => if (!(f.exists) || f.isDirectory || !(f.canWrite)) {
+          throw new IllegalArgumentException(f + " is not a writable file.")
+        }
+        case _ => {
+          throw new IllegalArgumentException("Invalid (File,String) pair.")
+        }
+      }
 
+      // Apply the changes. An error here may result in a corrupt disk state :(
+      changes.foreach {
+        case (file, newContents) => {
+          replaceFileContents(file, newContents) match {
+            case Right(_) => {}
+            case Left(e) => Right(Left(e))
+          }
+        }
+      }
+
+      Right(Right(()))
+
+    } catch {
+      case e: Exception => Left(e)
+    }
+  }
 
 }
-
-
 

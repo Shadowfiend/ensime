@@ -26,14 +26,20 @@
 
 (add-to-list 'auto-mode-alist '("\\.ensime$" . emacs-lisp-mode))
 
-(defun ensime-config-fix-path (f)
-  (expand-file-name f))
+(defun ensime-config-fix-path (f root)
+  ;; (ensime-config-fix-path "/home/aemon/rabbits.txt" "/home/aemon/")
+  ;; (ensime-config-fix-path "~/rabbits.txt" "/home/aemon/dogs")
+  (let ((rel (ensime-relativise-path f root)))
+    (if (integerp (string-match "^~" rel))
+	(expand-file-name rel)
+      rel)))
 
-(defun ensime-config-gen ()
+(defun ensime-config-gen (&optional default-root)
   "Interactively generate a new .ensime configuration file."
   (interactive)
   (catch 'done
-    (let* ((root (read-directory-name "Find project root: "))
+    (let* ((root (expand-file-name 
+		  (read-directory-name "Find project root: " default-root)))
 	   (conf-file (concat root "/" ensime-config-file-name)))
 
       ;; Check if config already exists for this project...
@@ -63,7 +69,7 @@
 
 
 (defun ensime-config-find-ensime-root (root)
-  (ensime-config-fix-path 
+  (expand-file-name 
    (read-directory-name 
     "Where did you unpack the ENSIME distribution?: " root)))
 
@@ -72,21 +78,22 @@
    "What is the name of your projects main package? e.g. com.myproject: "
    ))
 
+(defun ensime-config-read-project-name ()
+  (read-string "What is your project's name? "))
+
 (defun ensime-config-read-source-dirs (root)
   (list (ensime-config-fix-path 
 	 (read-directory-name 
-	  "Where is the project's source located? " root))))
+	  "Where is the project's source located? " root) root)))
 
-
-(defun ensime-config-read-dependency-jar-dirs (root)
+(defun ensime-config-read-jar-dir (prompt root)
   (list (ensime-config-fix-path 
-	 (read-directory-name 
-	  "Where are the project's dependency jars located? " root))))
+	 (read-directory-name prompt root) root)))
 
 (defun ensime-config-read-target-dir (root)
   (ensime-config-fix-path
    (read-directory-name 
-    "Where are classes written by the compiler? " root)))
+    "Where are classes written by the compiler? " root) root))
 
 (defmacro ensime-set-key (conf key val)
   `(setq ,conf (plist-put ,conf ,key ,val)))
@@ -94,6 +101,9 @@
 
 (defun ensime-config-build-maven (root)
   (let ((conf '()))
+
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
 
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
@@ -108,6 +118,9 @@
 
 (defun ensime-config-build-custom-with-ivy (root)
   (let ((conf '()))
+
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
 
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
@@ -130,25 +143,25 @@
 	   "Is your ivy.xml located somewhere other than the root of your project? ")
       (ensime-set-key conf :ivy-file
 		      (ensime-config-fix-path
-		       (read-file-name "Locate your ivy.xml file: " root "ivy.xml"))))
+		       (read-file-name "Locate your ivy.xml file: " root "ivy.xml") root)))
 
     (ensime-set-key conf :sources
 		    (ensime-config-read-source-dirs root))
 
     (when (yes-or-no-p 
 	   "Is there an unmanaged directory of jars you'd like to include in your dependencies? ")
-      (ensime-set-key conf :dependency-jars
+      (ensime-set-key conf :compile-jars
 		      (list (ensime-config-fix-path 
 			     (read-directory-name 
-			      "Where are the dependency jars located? " root)))))
+			      "Where are the jars located? " root) root))))
 
     (when (yes-or-no-p 
-	   "Are the core Scala jars located somewhere else? ")
-      (ensime-set-key conf :dependency-jars
-		      (append (plist-get conf :dependency-jars)
+	   "Is the Scala standard library located somewhere else? ")
+      (ensime-set-key conf :compile-jars
+		      (append (plist-get conf :compile-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root))))))
+				      "Where are is the Scala library located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
@@ -158,6 +171,9 @@
 
 (defun ensime-config-build-sbt (root)
   (let ((conf '()))
+
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
 
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
@@ -173,6 +189,9 @@
 (defun ensime-config-build-custom (root)
   (let ((conf '()))
 
+    (ensime-set-key conf :project-name 
+		    (ensime-config-read-project-name))
+
     (ensime-set-key conf :server-root 
 		    (ensime-config-find-ensime-root root))
 
@@ -182,16 +201,18 @@
     (ensime-set-key conf :sources
 		    (ensime-config-read-source-dirs root))
 
-    (ensime-set-key conf :dependency-jars
-		    (ensime-config-read-dependency-jar-dirs root))
+    (ensime-set-key conf :compile-jars
+		    (ensime-config-read-jar-dir 
+		     "Where are the project's dependency jars located? "
+		     root))
 
     (when (yes-or-no-p 
-	   "Are the core Scala jars located somewhere else? ")
-      (ensime-set-key conf :dependency-jars
-		      (append (plist-get conf :dependency-jars)
+	   "Is the Scala standard library located somewhere else? ")
+      (ensime-set-key conf :compile-jars
+		      (append (plist-get conf :compile-jars)
 			      (list (ensime-config-fix-path 
 				     (read-directory-name 
-				      "Where are the Scala jars located? " root))))))
+				      "Where are is the Scala library located? " root) root)))))
 
     (ensime-set-key conf :target
 		    (ensime-config-read-target-dir root))
@@ -208,12 +229,29 @@
 	 (conf (funcall builder-func root))
 	 (conf-file (concat root "/" ensime-config-file-name)))
     (with-temp-file conf-file
-      (insert (format "%S" conf)))
+      (ensime-config-insert-config conf))
     (message (concat "Your project config "
-		     "has been written to %s, "
-		     "run M-x ensime in a source "
-		     "buffer to launch ENSIME.") conf-file)
+		     "has been written to %s. "
+		     "Use 'M-x ensime' to launch "
+		     "ENSIME.") conf-file)
     ))
+
+(defun ensime-config-insert-config (conf)
+  (insert (concat ";; This config was generated using "
+		  "ensime-config-gen. Feel free to customize "
+		  "its contents manually. \n\n"))
+  (insert "(\n\n")
+  (let ((c conf))
+    (while c
+      (let ((a (pop c))
+	    (b (pop c)))
+	(insert (format "%S" a))
+	(insert " ")
+	(insert (format "%S" b))
+	(insert "\n\n")
+	)))
+  (insert ")\n"))
+
 
 (defun ensime-config-guess-type (root)
   "Return a best guess of what type of project is located at root."
@@ -249,25 +287,33 @@
 	  (if (not (equal dir (directory-file-name dir)))
 	      (ensime-config-find-file (directory-file-name dir)))))))
 
-(defun ensime-config-find-and-load ()
+(defun ensime-config-find-and-load (&optional default-dir)
   "Query the user for the path to a config file, then load it."
-  (let* ((default (if buffer-file-name
-		      (ensime-config-find-file buffer-file-name)))
-	 (file (if ensime-prefer-noninteractive default
+  (let* ((hint (or default-dir buffer-file-name))
+	 (guess (if hint (ensime-config-find-file hint)))
+	 (file (if ensime-prefer-noninteractive guess
 		 (read-file-name 
 		  "ENSIME Project file: "
-		  (if default (file-name-directory default))
-		  default
+		  (if guess (file-name-directory guess))
+		  guess
 		  nil
-		  (if default (file-name-nondirectory default))
+		  (if guess (file-name-nondirectory guess))
 		  ))))
 
-    (if (or (not (file-exists-p file))
-	    (file-directory-p file))
-	(error (format "Invalid ENSIME Project file: %s" file))
-      (ensime-config-load file))
+    ;; Should be ok to just give the project directory..
+    (let ((file (if (and (file-directory-p file)
+			 (file-exists-p (concat file "/" ensime-config-file-name)))
+		    (concat file "/" ensime-config-file-name)
+		  file)))
 
-    ))
+      (if (or (not (file-exists-p file))
+	      (file-directory-p file))
+	  (if (y-or-n-p "Could not find an ENSIME project file. Would you like to generate one? ")
+	      (ensime-config-gen (file-name-directory file))
+	    (message "Please see the ENSIME manual for instructions on how to write or generate a config file."))
+	(ensime-config-load file))
+
+      )))
 
 
 (defun ensime-config-load (file-name)

@@ -26,33 +26,44 @@
 target of the call. Point should be be over last character of call target."
   (let ((p (point)))
     (re-search-backward "[^\\. ][\\. ]" (point-at-bol) t)
-    (let ((text (buffer-substring (1+ (point)) p))
+    (let ((text (buffer-substring-no-properties (1+ (point)) p))
 	  (deactivate-mark nil))
       (delete-region (1+ (point)) p)
       text)))
-
 
 (defun ensime-ac-member-candidates (prefix)
   "Return candidate list."
   (let ((members 
 	 (ensime-ac-with-buffer-copy 
+
+	  ;; Make some space so trailing characters don't interfere.
 	  (save-excursion (insert " "))
+	  
+	  ;; Delete the member prefix - not necessary
 	  (ensime-ac-delete-text-back-to-call-target)
-	  (ensime-save-buffer-no-hooks)
+
+	  ;; Add a trailing '.' so object accesses parse correctly
+	  (save-excursion 
+	    (forward-char)
+	    (insert ". ()"))
+
+	  (ensime-write-buffer)
 	  (ensime-rpc-members-for-type-at-point prefix))))
+
     (mapcar (lambda (m)
 	      (let* ((type-sig (plist-get m :type-sig))
 		     (type-id (plist-get m :type-id))
 		     (is-callable (plist-get m :is-callable))
 		     (name (plist-get m :name))
-		     (candidate (concat name " : " type-sig)))
+		     (candidate name))
 		;; Save the type for later display
 		(propertize candidate
 			    'symbol-name name
-			    'scala-type-sig type-sig 
-			    'scala-type-id type-id
+			    'type-sig type-sig 
+			    'type-id type-id
 			    'is-callable is-callable
-			    ))) 
+			    'summary (ensime-ac-trunc-summary type-sig)
+			    )))
 	    members)
     ))
 
@@ -61,7 +72,7 @@ target of the call. Point should be be over last character of call target."
   "Create a duplicate of the current buffer, copying all contents. 
 Bind ensime-buffer-connection and buffer-file-name to the given values.
 Execute forms in body in the context of this new buffer. The idea is that
-We can abuse this buffer, even saving it's contents to disk, and all the 
+We can abuse this buffer, even saving its contents to disk, and all the 
 changes will be forgotten."
   `(let ((buf (current-buffer))
 	 (file-name buffer-file-name)
@@ -76,9 +87,8 @@ changes will be forgotten."
 			,@body
 			)))))
        ;; Make sure we overwrite any changes
-       ;; saved from temp buffer.
-       (clear-visited-file-modtime)
-       (ensime-save-buffer-no-hooks)
+       ;; written from temp buffer.
+       (ensime-write-buffer nil t)
        val
        )))
 
@@ -96,35 +106,85 @@ changes will be forgotten."
     (let ((names 
 	   (ensime-ac-with-buffer-copy 
 	    (backward-delete-char (length prefix))
+	    (insert ";{")
 	    (save-excursion
 	      ;; Insert a dummy value after (point), so that
 	      ;; if we are at the end of a method body, the
 	      ;; method context will be extended to include
 	      ;; the completion point.
-	      (insert "()"))
-	    (ensime-save-buffer-no-hooks)
-	    (ensime-rpc-name-completions-at-point
-	     prefix is-constructor))))
+	      (insert "  ;exit()};"))
+	      (ensime-write-buffer)
+	      (ensime-rpc-name-completions-at-point
+	       prefix is-constructor))))
 
       (mapcar (lambda (m)
 		(let* ((type-sig (plist-get m :type-sig))
 		       (type-id (plist-get m :type-id))
 		       (is-callable (plist-get m :is-callable))
 		       (name (plist-get m :name))
-		       (candidate (concat name " : " type-sig)))
+		       (candidate name))
 		  ;; Save the type for later display
 		  (propertize candidate
 			      'symbol-name name
-			      'scala-type-sig type-sig 
-			      'scala-type-id type-id
+			      'type-sig type-sig 
+			      'type-id type-id
 			      'is-callable is-callable
+			      'summary (ensime-ac-trunc-summary type-sig)
 			      ))
 		) names))))
 
 
+(defun ensime-ac-package-decl-candidates (prefix)
+  "Return candidate list."
+  (when (looking-back ensime-ac-package-decl-prefix-re 
+		      (ensime-pt-at-end-of-prev-line))
+    (let* ((full-match (match-string 0))
+	   (path (ensime-kill-txt-props (match-string 1)))
+
+	   (names (ensime-ac-with-buffer-copy 
+		   (backward-delete-char (length full-match))
+		   (insert "object ensimesynthetic${")
+
+		   (if (eq (length path) 0)
+
+		       (progn
+			 (save-excursion
+			   (insert "  }"))
+			 (ensime-write-buffer)
+			 (ensime-rpc-name-completions-at-point prefix))
+
+		     (progn
+		       (insert path)
+		       (save-excursion
+			 (insert "  }"))
+		       (backward-char 2)
+		       (ensime-write-buffer)
+		       (ensime-rpc-members-for-type-at-point prefix))))))
+
+      (delete-dups
+       (mapcar (lambda (m) (plist-get m :name)) 
+	       names)))))
+
+
+(defun ensime-ac-trunc-summary (str)
+  (let ((len (length str)))
+    (if (> len 40)
+	(concat (substring str 0 40) "...")
+      str)))
+
+(defun ensime-ac-candidate-name (c)
+  (get-text-property 0 'symbol-name c))
+
+(defun ensime-ac-candidate-type-sig (c)
+  (get-text-property 0 'type-sig c))
+
 (defun ensime-ac-get-doc (item)
   "Return doc for given item."
-  (get-text-property 0 'scala-type-sig item))
+  (get-text-property 0 'type-sig item))
+
+(defun ensime-pt-at-end-of-prev-line ()
+  (save-excursion (forward-line -1)(point-at-eol)))
+
 
 (defun ensime-ac-member-prefix ()
   "Starting at current point. Find the point of completion for a member access. 
@@ -132,17 +192,39 @@ changes will be forgotten."
   (let ((point (re-search-backward "[\\. ]+\\([^\\. ]*\\)?" (point-at-bol) t)))
     (if point (1+ point))))
 
-(defun ensime-pt-at-end-of-prev-line ()
-  (save-excursion (forward-line -1)(point-at-eol)))
+
+(defvar ensime-ac-name-following-keyword-re
+  (concat
+   "\\(?:\\W\\|\\s-\\)\\(?:else\\|case\\|new\\|with\\|extends\\)"
+   "\\s-+\\(\\w*\\)"))
+
+(defvar ensime-ac-name-following-syntax-re
+  (concat
+   "[!:=>(\\[,;}{\n+*/\\^&~%-]"
+   "\\s-*\\(\\w*\\)"))
 
 (defun ensime-ac-name-prefix ()
   "Starting at current point - find the point of completion for a symbol.
-Return nil if we are not currently looking at a symbol."
-  (if (looking-back "[=(\\[\\,\\;\\}\\{\n]\\s-*\\(?:new\\)?\\s-*\\(\\w+\\)" (ensime-pt-at-end-of-prev-line))
+Return nil if we're looking at a context where symbol completion is inappropriate."
+  (let ((left-bound (ensime-pt-at-end-of-prev-line)))
+    (when (or (looking-back  ensime-ac-name-following-keyword-re left-bound)
+	      (looking-back ensime-ac-name-following-syntax-re left-bound))
       (let ((point (- (point) (length (match-string 1)))))
 	(goto-char point)
 	point
-	)))
+	))))
+
+(defvar ensime-ac-package-decl-prefix-re 
+  "\\(?:package\\|import\\)[ ]+\\(\\(?:[a-z0-9]+\\.\\)*\\)\\([A-z0-9]*\\)")
+(defun ensime-ac-package-decl-prefix ()
+  "Starting at current point. Find the point of completion for a member access. 
+   Return nil if we are not currently looking at a member access."
+  (let ((left-bound (ensime-pt-at-end-of-prev-line)))
+    (when (looking-back ensime-ac-package-decl-prefix-re left-bound)
+      (let ((point (- (point) (length (match-string 2)))))
+	(goto-char point)
+	point))))
+
 
 (defun ensime-ac-complete-action ()
   "Defines action to perform when user selects a completion candidate.
@@ -156,43 +238,46 @@ params and param types as text-properties of the completed name. This info will
 be used later to give contextual help when entering arguments."
 
   (let* ((candidate candidate) ;;Grab from dynamic environment..
-	 (name (get-text-property 0 'symbol-name candidate))
-	 (type-id (get-text-property 0 'scala-type-id candidate)))
-    (delete-backward-char (length candidate))
-    (let ((name-start-point (point)))
-      (insert name)
+	 (name candidate)
+	 (type-id (get-text-property 0 'type-id candidate)))
+
+    (let ((name-start-point (- (point) (length name))))
 
       ;; If this member is callable, use the type-id to lookup call completion 
       ;; information to show parameter hints.
       (when (get-text-property 0 'is-callable candidate)
 
 	(let* ((call-info (ensime-rpc-get-call-completion type-id))
-	       (param-types (ensime-type-param-types call-info))
-	       (param-names (ensime-type-param-names call-info)))
-	  (when (and call-info param-names param-types)
-
-	    ;; Save param info as a text properties of the member name..
-	    (add-text-properties name-start-point 
-				 (+ name-start-point (length name))
-				 (list 'param-types param-types
-				       'param-names param-names
-				       ))
+	       (param-sections (ensime-type-param-sections call-info)))
+	  (when (and call-info param-sections)
 
 	    ;; Insert space or parens depending on the nature of the
 	    ;; call
 	    (save-excursion
-	      (if (and (= 1 (length param-types))
+	      (if (and (= 1 (length (car param-sections)))
 		       (null (string-match "[A-z]" name)))
 		  ;; Probably an operator..
 		  (insert " ")
 		;; Probably a normal method call
 		(insert "()" )))
 
-	    ;; Setup hook function to show param help later..
-	    (add-hook 'post-command-hook 'ensime-ac-update-param-help nil t)
+	    (if (car param-sections)
+		(progn
+		  ;; Save param info as a text properties of the member name..
+		  (add-text-properties name-start-point 
+				       (+ name-start-point (length name))
+				       (list 'call-info call-info
+					     ))
+		  ;; Setup hook function to show param help later..
+		  (add-hook 'post-command-hook 'ensime-ac-update-param-help nil t)
+		  ;; This command should trigger help hook..
+		  (forward-char))
 
-	    ;; This command should trigger help hook..
-	    (forward-char)
+	      ;; Otherwise, skip to the end
+	      (forward-char 2))
+	    
+
+	    
 	    ))))))
 
 
@@ -210,13 +295,11 @@ be used later to give contextual help when entering arguments."
 	   ((looking-at "\\s)") (decf balance))
 	   ((looking-at "\\s(") (incf balance))
 	   (t
-	    (let ((param-types (get-text-property (point) 'param-types))
-		  (param-names (get-text-property (point) 'param-names)))
-	      (if (and (or (> balance 0)) param-types)
+	    (let ((call-info (get-text-property (point) 'call-info)))
+	      (if (and (or (> balance 0)) call-info)
 		  (throw 'return (list 
 				  :name-end-point (point)
-				  :param-types param-types
-				  :param-names param-names))))))
+				  :call-info call-info))))))
 	  (backward-char 1))))))
 
 
@@ -227,22 +310,30 @@ be used later to give contextual help when entering arguments."
     (if info
 	(let* (;; To be used for tooltip positioning..
 	       (name-end (plist-get info :name-end-point))
-
-	       (param-types (plist-get info :param-types))
-	       (param-names (plist-get info :param-names))
-	       (i -1)
-	       (param-str (mapconcat
-			   (lambda (pt)
-			     (incf i)
-			     (format 
-			      "%s:%s" 
-			      (propertize (nth i param-names) 
-					  'face font-lock-variable-name-face)
-			      (propertize (ensime-type-name-with-args pt)
-					  'face font-lock-type-face)
-			      ))
-			   param-types ", ")))
-	  (message (concat "( " param-str " )")))
+	       (call-info (plist-get info :call-info))
+	       (param-sections (plist-get call-info :param-sections))
+	       (result-type (plist-get call-info :result-type))
+	       (signature (concat (mapconcat
+				   (lambda (sect)
+				     (concat "("
+					     (mapconcat
+					      (lambda (n-and-t)
+						(format 
+						 "%s:%s" 
+						 (propertize (car n-and-t) 
+							     'face font-lock-variable-name-face)
+						 (propertize (ensime-type-name-with-args 
+							      (cadr n-and-t))
+							     'face font-lock-type-face)
+						 ))
+					      sect ", ") ")"))
+				   param-sections " => ")
+				  " => " 
+				  (propertize 
+				   (ensime-type-name-with-args result-type)
+				   'face font-lock-type-face)
+				  )))
+	  (message signature))
       (remove-hook 'post-command-hook 'ensime-ac-update-param-help t))))
 
 
@@ -266,16 +357,25 @@ be used later to give contextual help when entering arguments."
     (cache . t)
     ))
 
+(ac-define-source ensime-package-decl-members
+  '((candidates . (ensime-ac-package-decl-candidates ac-prefix))
+    (prefix . ensime-ac-package-decl-prefix)
+    (requires . 0)
+    (symbol . "s")
+    (cache . t)
+    ))
+
 (defun ensime-ac-enable ()
   (make-local-variable 'ac-sources)
 
   ;; Note, we try to complete names before members.
   ;; This simplifies the regexes.
-  (setq ac-sources '(ac-source-ensime-scope-names
+  (setq ac-sources '(ac-source-ensime-package-decl-members
+		     ac-source-ensime-scope-names
 		     ac-source-ensime-members ))
 
   (make-local-variable 'ac-use-comphist)
-  (setq ac-use-comphist nil)
+  (setq ac-use-comphist t)
 
   (make-local-variable 'ac-auto-start)
   (setq ac-auto-start nil)
@@ -287,7 +387,13 @@ be used later to give contextual help when entering arguments."
   (setq ac-use-fuzzy nil)
 
   (make-local-variable 'ac-use-quick-help)
-  (setq ac-use-quick-help nil)
+  (setq ac-use-quick-help t)
+
+  (make-local-variable 'ac-delete-dups)
+  (setq ac-delete-dups nil)
+
+  (make-local-variable 'ac-ignore-case)
+  (setq ac-ignore-case t)
 
   (make-local-variable 'ac-trigger-key)
   (ac-set-trigger-key "TAB")

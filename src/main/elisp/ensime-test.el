@@ -48,6 +48,10 @@
 (put 'ensime-test-interrupted 'error-message "Test Interrupted")
 
 
+(defun ensime-test-concat-lines (&rest lines)
+  (mapconcat #'identity lines "\n"))
+
+
 (defun ensime-create-file (file-name contents)
   "Create file named file-name. Write contents to the file. Return file's name."
   (with-temp-file file-name
@@ -97,18 +101,18 @@
 (defvar ensime-tmp-project-hello-world
   `((:name 
      "hello_world.scala"
-     :contents ,(concat 
-		 "package com.helloworld\n"
-		 "class HelloWorld{\n"
-		 "}\n"
-		 "object HelloWorld {\n"
-		 "def main(args: Array[String]) = {\n"
-		 "Console.println(\"Hello, world!\")\n"
-		 "}\n"
-		 "def foo(a:Int, b:Int):Int = {\n"
+     :contents ,(ensime-test-concat-lines
+		 "package com.helloworld"
+		 "class HelloWorld{"
+		 "}"
+		 "object HelloWorld {"
+		 "def main(args: Array[String]) = {"
+		 "Console.println(\"Hello, world!\")"
+		 "}"
+		 "def foo(a:Int, b:Int):Int = {"
 		 "a + b"
-		 "}\n"
-		 "}\n"
+		 "}"
+		 "}"
 		 )
      )))
 
@@ -119,6 +123,7 @@
 	(root-dir (plist-get proj :root-dir)))
     (dolist (f src-files)
       (find-file f)
+      (set-buffer-modified-p nil)
       (kill-buffer nil))
     ;; a bit of paranoia..
     (if (and root-dir (integerp (string-match "^/tmp/" root-dir)))
@@ -303,13 +308,18 @@
     (setq ensime-test-queue nil))
   (switch-to-buffer ensime-testing-buffer))
 
+(defun ensime-test-eat-mark (mark)
+  (goto-char (point-min))
+  (when (search-forward-regexp (concat "/\\*" mark "\\*/") nil t)
+    (kill-backward-chars (+ 4 (length mark)))))
 
-(defun ensime-run-tests ()
-  "Run all regression tests for ensime-mode."
+;;;;;;;;;;;;;;;;;;
+;; ENSIME Tests ;;
+;;;;;;;;;;;;;;;;;;
+
+(defun ensime-run-fast-tests ()
   (interactive)
-
   (ensime-test-suite
-
 
 
    (ensime-test 
@@ -340,23 +350,81 @@
 
    (ensime-test 
     "Test name partitioning..."
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types$Type" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name "Types")
-     (ensime-assert-equal name "Type"))
 
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name nil)
-     (ensime-assert-equal name "Types"))
+    (ensime-with-name-parts 
+     "java.util.List" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "java.util" nil "List")))
 
-    (ensime-partition-qualified-type-name 
-     "scala.tools.nsc.symtab.Types$Dude$AbsType" (path outer-type-name name)
-     (ensime-assert-equal path "scala.tools.nsc.symtab")
-     (ensime-assert-equal outer-type-name "Types$Dude")
-     (ensime-assert-equal name "AbsType"))
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$Type" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types" "Type")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" nil "Types")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$Dude$AbsType" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types$Dude" "AbsType")))
+
+    (ensime-with-name-parts 
+     "scala.tools.nsc.symtab.Types$$Type$" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "scala.tools.nsc.symtab" "Types$" "Type$")))
+
+    (ensime-with-name-parts 
+     "Types$$Type$" (p o n)
+     (ensime-assert-equal (list p o n) 
+			  (list "" "Types$" "Type$")))
+
+    )
+
+   (ensime-test 
+    "Test course name partitioning..."
+
+    (ensime-with-path-and-name 
+     "java.util.List" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "java.util" "List")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$Type" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$Type")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$Dude$AbsType" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$Dude$AbsType")))
+
+    (ensime-with-path-and-name 
+     "scala.tools.nsc.symtab.Types$$Type$" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "scala.tools.nsc.symtab" "Types$$Type$")))
+
+    (ensime-with-path-and-name 
+     "Types$$Type$" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "" "Types$$Type$")))
+
+    (ensime-with-path-and-name 
+     "java.uti" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "java" "uti")))
+
+    (ensime-with-path-and-name 
+     "uti" (p n)
+     (ensime-assert-equal (list p n) 
+			  (list "" "uti")))
 
     )
    
@@ -366,6 +434,242 @@
     (ensime-assert (ensime-is-source-file-p "dude.scala"))
     (ensime-assert (ensime-is-source-file-p "dude.java"))
     (ensime-assert (not (ensime-is-source-file-p "dude.javap"))))
+
+   (ensime-test 
+    "Test relativization of paths..."
+    (ensime-assert-equal 
+     "./rabbits.txt" (ensime-relativise-path "/home/aemon/rabbits.txt" "/home/aemon/"))
+    (ensime-assert-equal 
+     "./a/b/d.txt" (ensime-relativise-path "/home/aemon/a/b/d.txt" "/home/aemon/" ))
+    (ensime-assert-equal 
+     "./a/b/d.txt" (ensime-relativise-path  "c:/home/aemon/a/b/d.txt" "c:/home/aemon/"))
+    (ensime-assert-equal 
+     "c:/home/blamon/a/b/d.txt" (ensime-relativise-path  "c:/home/blamon/a/b/d.txt" "c:/home/aemon/")))
+
+   ))
+
+
+(defun ensime-run-slow-tests ()
+  (interactive)
+  (ensime-test-suite
+
+
+   (ensime-async-test 
+    "Test completing members."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+
+				 "class HelloWorld{"
+				 "  def foo(a:Int, b:Int):Int = {"
+				 "    HelloWorld./*1*/"
+				 "  }"
+				 "  def bar(a:Int, b:Int):Int = {"
+				 "    val v = HelloWorld./*2*/"
+				 "    foo(1,v)"
+				 "  }"
+				 "}"
+
+				 "object HelloWorld {"
+				 "  def blarg = 5"
+				 "  def add(a:Int, b:Int) = {"
+				 "    System.out.pri/*3*/"
+				 "    a + b"
+				 "  }"
+				 "  def test() {"
+				 "    val dude = \"hello\""
+				 "    System.out.println(dude./*4*/)"
+				 "  }"
+				 "  def test2() = {"
+				 "    val dude = \"hello\""
+				 "    dude.substring(2,2).hea/*5*/"
+				 "  }"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+
+       ;; object method completion
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-member-candidates "")))
+	 (ensime-assert (member "add" candidates)))
+
+       ;; Try completion when a method begins without target 
+       ;; on next line.
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-member-candidates "")))
+	 (ensime-assert (member "blarg" candidates)))
+
+       ;; Instance completion with prefix
+       (ensime-test-eat-mark "3")
+       (let* ((candidates (ensime-ac-member-candidates "pri")))
+	 (ensime-assert (member "println" candidates)))
+
+       ;; Complete member of argument
+       (ensime-test-eat-mark "4")
+       (let* ((candidates (ensime-ac-member-candidates "s")))
+	 (ensime-assert (member "substring" candidates)))
+
+       ;; Chaining of calls
+       (ensime-test-eat-mark "5")
+       (let* ((candidates (ensime-ac-member-candidates "hea")))
+	 (ensime-assert (member "headOption" candidates)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+   (ensime-async-test 
+    "Test completing symbols."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+				 "import java.io.File"
+
+				 "class HelloWorld{"
+
+				 "  def main {"
+				 "    val f = new Fi/*1*/"
+				 "  }"
+
+				 "  def blarg:Int = 5"
+
+				 "  def add(a:Int):Int = {"
+				 "    a + bl/*2*/"
+				 "  }"
+
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+
+       ;; constructor completion
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-name-candidates "Fi")))
+	 (ensime-assert (member "File" candidates)))
+
+       ;; local method name completion.
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-name-candidates "bl")))
+	 (ensime-assert (member "blarg" candidates)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+
+   (ensime-async-test 
+    "Test completing imports."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "hello_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "package com.helloworld"
+				 "import java.ut/*1*/"
+				 "class HelloWorld{"
+				 "import sc/*2*/"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       (find-file (car src-files))
+
+       ;; complete java package member
+       (ensime-test-eat-mark "1")
+       (let* ((candidates (ensime-ac-package-decl-candidates "ut")))
+	 (ensime-assert (member "util" candidates)))
+
+       ;; complete scala package
+       (ensime-test-eat-mark "2")
+       (let* ((candidates (ensime-ac-package-decl-candidates "sc")))
+	 (ensime-assert (member "scala" candidates)))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       ))
+    )
+
+
+   (ensime-async-test 
+    "Test formatting source."
+    (let* ((proj (ensime-create-tmp-project
+		  `((:name 
+		     "format_world.scala"
+		     :contents ,(ensime-test-concat-lines 
+				 "class HelloWorld{"
+				 "def foo:Int=1"
+				 "}"
+				 )
+		     ))))
+	   (src-files (plist-get proj :src-files)))
+      (ensime-test-var-put :proj proj)
+      (find-file (car src-files))
+      (ensime))
+
+    ((:connected connection-info))
+
+    ((:full-typecheck-finished val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+       (save-buffer)
+       (ensime-format-source)))
+
+    ((:return-value val)
+     (let* ((proj (ensime-test-var-get :proj))
+	    (src-files (plist-get proj :src-files)))
+       ;; Set cursor to symbol in method body..
+       (find-file (car src-files))
+       (let ((src (buffer-substring-no-properties 
+		   (point-min) (point-max))))
+	 (ensime-assert-equal src (ensime-test-concat-lines 
+				   "class HelloWorld {"
+				   "  def foo: Int = 1"
+				   "}"
+				   )))
+
+       (ensime-cleanup-tmp-project proj)
+       (ensime-kill-all-ensime-servers)
+       )))
+
 
    (ensime-async-test 
     "Load and compile 'hello world'."
@@ -381,7 +685,6 @@
 
     ((:full-typecheck-finished val)
      (let ((proj (ensime-test-var-get :proj)))
-       (ensime-assert-equal val '(:notes ()))
        (ensime-cleanup-tmp-project proj)
        (ensime-kill-all-ensime-servers)
        ))
@@ -403,7 +706,6 @@
 
     ((:full-typecheck-finished val)
      (let ((proj (ensime-test-var-get :proj)))
-       (ensime-assert-equal val '(:notes ()))
        (let ((info (ensime-rpc-inspect-package-by-path
 		    "com.helloworld")))
 	 (ensime-assert (not (null info)))
@@ -466,7 +768,6 @@
     ((:full-typecheck-finished val)
      (let* ((proj (ensime-test-var-get :proj))
 	    (src-files (plist-get proj :src-files)))
-       (ensime-assert-equal val '(:notes ()))
        ;; Set cursor to symbol in method body..
        (find-file (car src-files))
        (goto-char 163)
@@ -532,8 +833,16 @@
        ))
     )
 
-
-
    ))
+
+(defun ensime-run-tests ()
+  "Run all regression tests for ensime-mode."
+  (interactive)
+  (ensime-run-fast-tests)
+  (ensime-run-slow-tests))
+
+
+
+
 
 (provide 'ensime-test)

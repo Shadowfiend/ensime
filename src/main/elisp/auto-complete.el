@@ -221,6 +221,12 @@ If you specify `nil', never be started automatically."
   :type '(repeat string)
   :group 'auto-complete)
 
+(defcustom ac-delete-dups t
+  "Non-nil means that duplicate candidates will be automatically
+removed."
+  :type '(repeat string)
+  :group 'auto-complete)
+
 (defcustom ac-ignore-case 'smart
   "Non-nil means auto-complete ignores case.
 If this value is `smart', auto-complete ignores case only when
@@ -699,9 +705,9 @@ You can not use it in source definition like (prefix . `NAME')."
                     (< width string-width)
                     (setq c (char-after))
                     (not (eq c ?\t)))   ; special case for tab
-        (incf width (char-width c))
-        (incf length)
-        (forward-char)))
+	  (incf width (char-width c))
+	  (incf length)
+	  (forward-char)))
 
       ;; Show completion
       (goto-char point)
@@ -919,7 +925,8 @@ You can not use it in source definition like (prefix . `NAME')."
         append (ac-candidates-1 source) into candidates
         finally return
         (progn
-          (delete-dups candidates)
+	  (when ac-delete-dups
+	    (delete-dups candidates))
           (if (and ac-use-comphist ac-comphist)
               (if ac-show-menu
                   (let* ((pair (ac-comphist-sort ac-comphist candidates prefix-len ac-comphist-threshold))
@@ -1176,16 +1183,16 @@ that have been made before in this function."
   (when (and (or force (null this-command))
              (ac-menu-live-p)
              (null ac-quick-help))
-      (setq ac-quick-help
-            (funcall (if (and ac-quick-help-prefer-x
-                              (eq window-system 'x)
-                              (featurep 'pos-tip))
-                         'ac-pos-tip-show-quick-help
-                       'popup-menu-show-quick-help)
-                     ac-menu nil
-                     :point ac-point
-                     :height ac-quick-help-height
-                     :nowait t))))
+    (setq ac-quick-help
+	  (funcall (if (and ac-quick-help-prefer-x
+			    (eq window-system 'x)
+			    (featurep 'pos-tip))
+		       'ac-pos-tip-show-quick-help
+		     'popup-menu-show-quick-help)
+		   ac-menu nil
+		   :point ac-point
+		   :height ac-quick-help-height
+		   :nowait t))))
 
 (defun ac-remove-quick-help ()
   (when ac-quick-help

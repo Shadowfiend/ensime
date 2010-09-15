@@ -7,199 +7,293 @@ import org.ensime.util.SExp._
 import scala.actors._
 import scala.actors.Actor._
 import scala.collection.mutable
+import scalariform.formatter.preferences._
 
 
-
-object ProjectConfig{
+object ProjectConfig {
 
   /**
-  * Create a ProjectConfig instance from the given
-  * SExp property list.
-  */
-  def apply(config:SExpList) = {
+   * Create a ProjectConfig instance from the given
+   * SExp property list.
+   */
+  def apply(config: SExpList) = {
     import ExternalConfigInterface._
 
     val m = config.toKeywordMap
 
-    val rootDir = m.get(key(":root-dir")) match{
+    val rootDir: CanonFile = m.get(key(":root-dir")) match {
       case Some(StringAtom(str)) => new File(str)
       case _ => new File(".")
     }
 
-    val sourceRoots = new mutable.HashSet[File]
-    val runtimeDeps = new mutable.HashSet[File]
-    val compileDeps = new mutable.HashSet[File]
-    val classDirs = new mutable.HashSet[File]
-    var target:Option[File] = None
+    println("Using project root: " + rootDir)
 
-    m.get(key(":use-sbt")) match{
+    val sourceRoots = new mutable.HashSet[CanonFile]
+    val runtimeDeps = new mutable.HashSet[CanonFile]
+    val compileDeps = new mutable.HashSet[CanonFile]
+    val classDirs = new mutable.HashSet[CanonFile]
+    var target: Option[CanonFile] = None
+
+    m.get(key(":use-sbt")) match {
       case Some(TruthAtom()) => {
-	val ext = getSbtConfig(rootDir)
-	sourceRoots ++= ext.sourceRoots
-	runtimeDeps ++= ext.runtimeDepJars
-	compileDeps ++= ext.compileDepJars
-	compileDeps ++= ext.testDepJars
-	target = ext.target
+        println("Using sbt configuration..")
+        val ext = getSbtConfig(rootDir)
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        compileDeps ++= ext.testDepJars
+        target = ext.target
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":use-maven")) match{
+    m.get(key(":use-maven")) match {
       case Some(TruthAtom()) => {
-	val ext = getMavenConfig(rootDir)
-	sourceRoots ++= ext.sourceRoots
-	runtimeDeps ++= ext.runtimeDepJars
-	compileDeps ++= ext.compileDepJars
-	compileDeps ++= ext.testDepJars
-	target = ext.target
+        println("Using maven configuration..")
+        val ext = getMavenConfig(rootDir)
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        compileDeps ++= ext.testDepJars
+        target = ext.target
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":use-ivy")) match{
+    m.get(key(":use-ivy")) match {
       case Some(TruthAtom()) => {
-	val rConf = m.get(key(":ivy-runtime-conf")).map(_.toString)
-	val cConf = m.get(key(":ivy-compile-conf")).map(_.toString)
-	val tConf = m.get(key(":ivy-test-conf")).map(_.toString)
-	val file = m.get(key(":ivy-file")).map(s => new File(s.toString))
-	val ext = getIvyConfig(rootDir, file, rConf, cConf, tConf)
-	sourceRoots ++= ext.sourceRoots
-	runtimeDeps ++= ext.runtimeDepJars
-	compileDeps ++= ext.compileDepJars
-	compileDeps ++= ext.testDepJars
-	target = ext.target
+        println("Using ivy configuration..")
+        val rConf = m.get(key(":ivy-runtime-conf")).map(_.toString)
+        val cConf = m.get(key(":ivy-compile-conf")).map(_.toString)
+        val tConf = m.get(key(":ivy-test-conf")).map(_.toString)
+        val file = m.get(key(":ivy-file")).map(s => new File(s.toString))
+        val ext = getIvyConfig(rootDir, file, rConf, cConf, tConf)
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        compileDeps ++= ext.testDepJars
+        target = ext.target
       }
-      case _ => 
+      case _ =>
     }
-    
-    m.get(key(":dependency-jars")) match{
+
+    m.get(key(":runtime-jars")) match {
       case Some(SExpList(items)) => {
-	val jars = maybeFiles(items.map(_.toString), rootDir)
-	compileDeps ++= expandRecursively(rootDir, jars, isValidJar _)
-	runtimeDeps ++= expandRecursively(rootDir, jars, isValidJar _)
+        val jarsAndDirs = maybeFiles(items.map(_.toString), rootDir)
+        val toInclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually including " + toInclude.size + " run-time jars.")
+        runtimeDeps ++= toInclude
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":runtime-dependency-jars")) match{
+    m.get(key(":exclude-runtime-jars")) match {
       case Some(SExpList(items)) => {
-	val jars = maybeFiles(items.map(_.toString), rootDir)
-	runtimeDeps ++= expandRecursively(rootDir, jars, isValidJar _)
+        val jarsAndDirs = maybeFiles(items.map(_.toString), rootDir)
+        val toExclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually excluding " + toExclude.size + " run-time jars.")
+        runtimeDeps --= toExclude
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":compile-dependency-jars")) match{
+    m.get(key(":compile-jars")) match {
       case Some(SExpList(items)) => {
-	val jars = maybeFiles(items.map(_.toString), rootDir)
-	compileDeps ++= expandRecursively(rootDir, jars, isValidJar _)
+        val jarsAndDirs = maybeFiles(items.map(_.toString), rootDir)
+        val toInclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually including " + toInclude.size + " compile-time jars.")
+        compileDeps ++= toInclude
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":dependency-dirs")) match{
+    m.get(key(":exclude-compile-jars")) match {
       case Some(SExpList(items)) => {
-	val dirs = maybeDirs(items.map(_.toString), rootDir)
-	classDirs ++= expand(rootDir,dirs,isValidClassDir _)
+        val jarsAndDirs = maybeFiles(items.map(_.toString), rootDir)
+        val toExclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually excluding " + toExclude.size + " compile-time jars.")
+        compileDeps --= toExclude
       }
-      case _ => 
+      case _ =>
     }
 
-    m.get(key(":sources")) match{
+    m.get(key(":class-dirs")) match {
       case Some(SExpList(items)) => {
-	val dirs = maybeDirs(items.map(_.toString), rootDir)
-	sourceRoots ++= dirs
+        val dirs = maybeDirs(items.map(_.toString), rootDir)
+        println("Manually including " + dirs.size + " class directories.")
+        classDirs ++= expand(rootDir, dirs, isValidClassDir _)
       }
-      case _ => 
+      case _ =>
     }
-    val sourceFiles = expandRecursively(rootDir,sourceRoots,isValidSourceFile _)
 
+    m.get(key(":sources")) match {
+      case Some(SExpList(items)) => {
+        val dirs = maybeDirs(items.map(_.toString), rootDir)
+        println("Using source roots: " + dirs.mkString(", "))
+        sourceRoots ++= dirs
+      }
+      case _ =>
+    }
 
-    m.get(key(":target")) match{
+    m.get(key(":target")) match {
       case Some(StringAtom(targetDir)) => {
-	target = target.orElse(maybeDir(targetDir, rootDir))
+        target = target.orElse(maybeDir(targetDir, rootDir))
       }
-      case _ => 
+      case _ =>
     }
+
+    val formatPrefs: Map[Symbol, Any] = m.get(key(":formatting-prefs")) match {
+      case Some(list: SExpList) => {
+        list.toKeywordMap.map {
+          case (KeywordAtom(key), sexp: SExp) => (Symbol(key.substring(1)), sexp.toScala)
+        }
+      }
+      case _ => Map[Symbol, Any]()
+    }
+    println("Using formatting preferences: " + formatPrefs)
+
+    // Provide some reasonable defaults..
 
     target = verifyTargetDir(rootDir, target, new File(rootDir, "target/classes"))
     println("Using target directory: " + target.getOrElse("ERROR"))
 
-    new ProjectConfig(rootDir, sourceFiles, 
-      sourceRoots, runtimeDeps, compileDeps, 
-      classDirs, target)
-    
+    if (sourceRoots.isEmpty) {
+      val f = new File("src")
+      if (f.exists && f.isDirectory) {
+        println("Using default source root, 'src'.")
+        sourceRoots += f
+      }
+    }
+
+    new ProjectConfig(
+      rootDir, sourceRoots, runtimeDeps,
+      compileDeps, classDirs, target,
+      formatPrefs)
+
   }
 
   // If given target directory is not valid, use the default,
   // creating if necessary.
-  def verifyTargetDir(rootDir:File, target:Option[File], defaultTarget:File):Option[File] = {
-    val targetDir = target match{
-      case Some(f:File) => {
-	if(f.exists && f.isDirectory) { f } else{ defaultTarget }
+  def verifyTargetDir(rootDir: File, target: Option[File], defaultTarget: File): Option[CanonFile] = {
+    val targetDir = target match {
+      case Some(f: File) => {
+        if (f.exists && f.isDirectory) { f } else { defaultTarget }
       }
       case None => defaultTarget
     }
-    if(targetDir.exists){
+    if (targetDir.exists) {
       Some(targetDir)
-    }
-    else{
-      try{
-	if(targetDir.mkdirs) Some(targetDir)
-	else None
-      }
-      catch{
-	case e => None
+    } else {
+      try {
+        if (targetDir.mkdirs) Some(targetDir)
+        else None
+      } catch {
+        case e => None
       }
     }
   }
 
+  def nullConfig = new ProjectConfig(new File("."), List(),
+    List(), List(), List(), None, Map())
 
-  def nullConfig = new ProjectConfig(new File("."), List(), List(), 
-    List(), List(), List(), None)
+  def getJavaHome(): Option[File] = {
+    val javaHome: String = System.getProperty("java.home");
+    if (javaHome == null) None
+    else Some(new File(javaHome))
+  }
 
+  def javaBootJars(): Set[CanonFile] = {
+    val javaHome = getJavaHome();
+    javaHome match {
+      case Some(javaHome) => {
+        if (System.getProperty("os.name").startsWith("Mac")) {
+          expandRecursively(
+            new File("."),
+            List(new File(javaHome, "../Classes")),
+            isValidJar)
+        } else {
+          expandRecursively(
+            new File("."),
+            List(new File(javaHome, "lib")),
+            isValidJar)
+        }
+      }
+      case None => Set()
+    }
+  }
 }
 
+class ReplConfig(val classpath: String) {}
 
-class ReplConfig(val classpath:String){}
-
-class DebugConfig(val classpath:String, val sourcepath:String){}
+class DebugConfig(val classpath: String, val sourcepath: String) {}
 
 class ProjectConfig(
-  val root:File,
-  val sources:Iterable[File],
-  val sourceRoots:Iterable[File],
-  val runtimeDeps:Iterable[File],
-  val compileDeps:Iterable[File],
-  val classDirs:Iterable[File],
-  val target:Option[File]){
+  val root: CanonFile,
+  val sourceRoots: Iterable[CanonFile],
+  val runtimeDeps: Iterable[CanonFile],
+  val compileDeps: Iterable[CanonFile],
+  val classDirs: Iterable[CanonFile],
+  val target: Option[CanonFile],
+  formattingPrefsMap: Map[Symbol, Any]) {
 
-  def compilerClasspathFilenames:Set[String] = {
-    val allFiles = compileDeps ++ classDirs
-    allFiles.map(_.getAbsolutePath).toSet
+  val formattingPrefs = formattingPrefsMap.
+    foldLeft(FormattingPreferences()) { (fp, p) =>
+      p match {
+        case ('alignParameters, value: Boolean) =>
+          fp.setPreference(AlignParameters, value)
+        case ('compactStringConcatenation, value: Boolean) =>
+          fp.setPreference(CompactStringConcatenation, value)
+        case ('doubleIndentClassDeclaration, value: Boolean) =>
+          fp.setPreference(DoubleIndentClassDeclaration, value)
+        case ('formatXml, value: Boolean) =>
+          fp.setPreference(FormatXml, value)
+        case ('indentSpaces, value: Int) =>
+          fp.setPreference(IndentSpaces, value)
+        case ('preserveSpaceBeforeArguments, value: Boolean) =>
+          fp.setPreference(PreserveSpaceBeforeArguments, value)
+        case ('rewriteArrowSymbols, value: Boolean) =>
+          fp.setPreference(RewriteArrowSymbols, value)
+        case ('spaceBeforeColon, value: Boolean) =>
+          fp.setPreference(SpaceBeforeColon, value)
+        case (name, _) => {
+          System.err.println("Oops, unrecognized formatting option: " + name)
+          fp
+        }
+      }
+    }
+
+  def compilerClasspathFilenames: Set[String] = {
+    (compileDeps ++ classDirs).map(_.getPath).toSet
   }
 
-  def sourceFilenames:Set[String] = {
-    sources.map(_.getAbsolutePath).toSet
+  def sources: Set[CanonFile] = {
+    expandRecursively(root, sourceRoots, isValidSourceFile _).toSet
+  }
+
+  def sourceFilenames: Set[String] = {
+    sources.map(_.getPath).toSet
   }
 
   def compilerArgs = List(
-    "-classpath", compilerClasspathFilenames.mkString(File.pathSeparator),
+    "-classpath", compilerClasspath,
     "-verbose",
     sourceFilenames.mkString(" ")
-  )
+    )
 
   def builderArgs = List(
-    "-classpath", compilerClasspathFilenames.mkString(File.pathSeparator),
+    "-classpath", compilerClasspath,
     "-verbose",
-    "-d", target.getOrElse(new File(root,"classes")).getAbsolutePath,
-    "-Ybuildmanagerdebug",
+    "-d", target.getOrElse(new File(root, "classes")).getPath,
     sourceFilenames.mkString(" ")
-  )
+    )
 
-  def runtimeClasspath = {
-    val allFiles = runtimeDeps ++ classDirs ++ target
-    val paths = allFiles.map(_.getAbsolutePath).toSet
+  def compilerClasspath: String = {
+    compilerClasspathFilenames.mkString(File.pathSeparator)
+  }
+
+  def runtimeClasspath: String = {
+    val allFiles = compileDeps ++ runtimeDeps ++ classDirs ++ target
+    val paths = allFiles.map(_.getPath).toSet
     paths.mkString(File.pathSeparator)
   }
 
@@ -208,7 +302,7 @@ class ProjectConfig(
   def debugClasspath = runtimeClasspath
 
   def debugSourcepath = {
-    sourceRoots.map(_.getAbsolutePath).toSet.mkString(File.pathSeparator)
+    sourceRoots.map(_.getPath).toSet.mkString(File.pathSeparator)
   }
 
   def replConfig = new ReplConfig(replClasspath)
@@ -216,6 +310,4 @@ class ProjectConfig(
   def debugConfig = new DebugConfig(debugClasspath, debugSourcepath)
 
 }
-
-
 

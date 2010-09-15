@@ -112,18 +112,8 @@ trait Protocol extends ProtocolConversions{
   def sendRPCReturn(value:WireFormat, callId:Int)
 
   /**
-  * Notify the client that an error occurred in 
-  * processing the RPC call.
-  *
-  * @param  value  A message describing the error.
-  * @param  callId The id of the failed RPC call.
-  * @return        Void
-  */ 
-  def sendRPCReturnError(value:String, callId:Int)
-
-  /**
   * Notify the client that the RPC call could not
-  * be processed.
+  * be handled.
   *
   * @param  value  A message describing the error.
   * @param  callId The id of the failed RPC call.
@@ -164,20 +154,11 @@ trait Protocol extends ProtocolConversions{
   * generates. These results are generated asynchronously,
   * and not in response to any single RPC call.
   *
-  * @param result  The notes
+  * @param notes  The notes
   * @return        Void
   */ 
-  def sendFullTypeCheckResult(result:FullTypeCheckResultEvent)
+  def sendTypeCheckResult(notes:NoteList)
 
-  /**
-  * Send notes describing errors, warnings that the compiler
-  * generates.These results are generated asynchronously,
-  * and not in response to any single RPC call.
-  *
-  * @param  result  The notes
-  * @return        Void
-  */ 
-  def sendQuickTypeCheckResult(result:QuickTypeCheckResultEvent)
 
 }
 
@@ -187,9 +168,10 @@ trait ProtocolConversions{
   def toWF(unit:DebugUnit):WireFormat
   def toWF(value:Boolean):WireFormat
   def toWF(value:DebugSourceLinePairs):WireFormat
-  def toWF(value:NoteList):WireFormat
+  def toWF(value:Note):WireFormat
   def toWF(values:Iterable[WireFormat]):WireFormat
   def toWF(value:SymbolInfoLight):WireFormat
+  def toWF(value:PackageMemberInfoLight):WireFormat
   def toWF(value:SymbolInfo):WireFormat
   def toWF(value:NamedTypeMemberInfoLight):WireFormat
   def toWF(value:NamedTypeMemberInfo):WireFormat
@@ -203,4 +185,5 @@ trait ProtocolConversions{
   def toWF(value:RefactorFailure):WireFormat
   def toWF(value:RefactorEffect):WireFormat
   def toWF(value:RefactorResult):WireFormat
+  def toWF(value: Null): WireFormat
 }
