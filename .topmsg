@@ -1,6 +1,7 @@
 From: Marc Weber <marco-oweber@gmx.de>
-Subject: [PATCH] t/bash-to-sh
+Subject: [PATCH] t/find-server-by-elisp-path
 
-/bin/sh is sufficient in server.sh script
+specifying the server location is awkward.
+It can be found by taking a path relative to the elisp files
 
 Signed-off-by: Marc Weber <marco-oweber@gmx.de>
