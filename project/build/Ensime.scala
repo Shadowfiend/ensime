@@ -18,6 +18,7 @@ class EnsimeProject(info: ProjectInfo) extends DefaultProject(info){
 //  val refactoring = "org.scala-refactoring" % "org.scala-refactoring.library" % "0.2.0-SNAPSHOT"%"compile;runtime;test"
   val asm = "asm" % "asm" % "3.2"
   val asmCommons = "asm" % "asm-commons" % "3.2"
+  val liftJson = "net.liftweb" % "lift-json_2.8.0" % "2.1"
 
 
   //override def compileOptions = compileOptions("-g:vars") ++ super.compileOptions.toList
