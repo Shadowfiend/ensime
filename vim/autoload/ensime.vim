@@ -84,7 +84,12 @@ fun! ensime#Request(request) abort
   return s:c.callId-1
 endf
 
-fun! ensime#Receive(line, ...) dict
+fun! ensime#Receive(...) dict
+  " debug by prefixng this line by "debug" and :load % this buffer
+  return call(function('ensime#Receive2'), a:000, self)
+endf
+
+fun! ensime#Receive2(line, ...) dict
   call s:Log('got: '.a:line)
   let reply = json_encoding#Decode(a:line)
   if has_key(reply, 'error')
@@ -128,7 +133,12 @@ fun! ensime#Receive(line, ...) dict
         " show type info in preview window
 
         " type at request:
-        let s = ['arrow-type: '. data.type['arrow-type'] .' '. data.type.name, string(data['decl-pos'])]
+        " let s = ['arrow-type: '. data.type['arrow-type'] .' '. data.type.name, string(data['decl-pos'])]
+        let s = []
+        if exists('data.type["full-name"]')
+          call add(s, data.type["full-name"])
+        endif
+        call add(s, string(data))
 
         if !exists('s:ped_file')
           let s:ped_file = tempname()
@@ -330,5 +340,5 @@ fun! ensime#FormatSource(sources)
 endf
 
 fun! ensime#TypeAtCursor(act)
-  let s:c.con.typeAtCursorCalls[ensime#Request(['swank:symbol-at-point', expand('%'), ensime#LocationOfCursor()[1]])] = a:act
+  let s:c.con.typeAtCursorCalls[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = a:act
 endf
