@@ -1,0 +1,15 @@
+{
+  "name" : "ensime",
+  "version" : "0.1",
+  "author" : "Marc Weber <marco-oweber@gmx.de>",
+  "maintainer" : "Marc Weber <marco-oweber@gmx.de>",
+  "repository" : {"type": "git", "url": "git://github.com/MarcWeber/ensime.git", "branch" : "master-vim"},
+  "runtimepath" : "vim",
+  "dependencies" : {
+    "vim-addon-async": {},
+    "vim-addon-completion": {},
+    "vim-addon-json-encoding": {},
+    "vim-addon-signs": {},
+  },
+  "description" : "Branch making Vim talk to Ensime. Original repository is at http://github.com/aemoncannon. I hope that the changes will be merged upstream when they are more stable"
+}
