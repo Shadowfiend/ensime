@@ -25,7 +25,7 @@ case class AddSourceFilesReq(files: Iterable[File])
 case class RemoveSourceFilesReq(files: Iterable[File])
 case class UpdateSourceFilesReq(files: Iterable[File])
 
-class IncrementalBuilder(project: Project, protocol: ProtocolConversions[SExp], config: ProjectConfig) extends Actor {
+class IncrementalBuilder(project: Project, protocol: ProtocolConversions[_ >: net.liftweb.json.JsonAST.JValue with org.ensime.util.SExp <: ScalaObject], config: ProjectConfig) extends Actor {
 
   class IncrementalBuildManager(settings: Settings, reporter: Reporter)
   extends RefinedBuildManager(settings) {

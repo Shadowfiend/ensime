@@ -134,7 +134,7 @@ trait SwankProtocol extends Protocol[SExp] {
       case "swank:init-project" => {
         form match {
           case SExpList(head ::(conf: SExpList) :: body) => {
-            val config = ProjectConfig.fromSExp(conf)
+            val config = ProjectConfig.fromSExp(conf, None)
             rpcTarget.rpcInitProject(config, callId)
           }
           case _ => oops

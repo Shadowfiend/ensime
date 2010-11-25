@@ -8,6 +8,7 @@ import scala.actors._
 import scala.actors.Actor._
 import scala.collection.mutable
 import scalariform.formatter.preferences._
+import net.liftweb.json.JsonAST._;
 
 object ProjectConfig {
 
@@ -15,14 +16,17 @@ object ProjectConfig {
   * Create a ProjectConfig instance from the given
   * SExp property list.
   */
-  def fromSExp(config: SExpList) = {
+  def fromSExp(config: SExpList, mbrootDir: Option[String]) = {
     import ExternalConfigInterface._
 
     val m = config.toKeywordMap
 
-    val rootDir: CanonFile = m.get(key(":root-dir")) match {
-      case Some(StringAtom(str)) => new File(str)
-      case _ => new File(".")
+    val rootDir: CanonFile = mbrootDir match {
+      case Some(p:String) => new File(p)
+      case _ => m.get(key(":root-dir")) match {
+        case Some(StringAtom(str)) => new File(str)
+        case _ => new File(".")
+      }
     }
 
     println("Using project root: " + rootDir)
@@ -153,6 +157,180 @@ object ProjectConfig {
         list.toKeywordMap.map {
           case (KeywordAtom(key), sexp: SExp) => (Symbol(key.substring(1)), sexp.toScala)
         }
+      }
+      case _ => Map[Symbol, Any]()
+    }
+    println("Using formatting preferences: " + formatPrefs)
+
+
+    // Provide fix for 2.8.0 backwards compatibility
+    val implicitNotFoundJar = new File("lib/implicitNotFound.jar")
+    assert (implicitNotFoundJar.exists, { System.err.println(
+	  "lib/implicitNotFound.jar not found! 2.8.0 compatibility may be broken.") })
+    compileDeps += implicitNotFoundJar
+
+    // Provide some reasonable defaults..
+
+    target = verifyTargetDir(rootDir, target, new File(rootDir, "target/classes"))
+    println("Using target directory: " + target.getOrElse("ERROR"))
+
+    if (sourceRoots.isEmpty) {
+      val f = new File("src")
+      if (f.exists && f.isDirectory) {
+        println("Using default source root, 'src'.")
+        sourceRoots += f
+      }
+    }
+
+    new ProjectConfig(
+      projectName,
+      rootDir, sourceRoots, runtimeDeps,
+      compileDeps, classDirs, target,
+      formatPrefs)
+
+  }
+
+  // this fromJson implementation may be incomplete
+  // FIXME: match 1 isntead of any number (_)
+  def fromJson(config: JObject, mbrootDir: Option[String]) = {
+    import ExternalConfigInterface._
+
+    val m = config.values
+
+    val rootDir: CanonFile = mbrootDir match {
+      case Some(p:String) => new File(p)
+      case _ => m.get(":root-dir") match {
+        case Some(StringAtom(str)) => new File(str)
+        case _ => new File(".")
+      }
+    }
+
+    println("Using project root: " + rootDir)
+
+    val sourceRoots = new mutable.HashSet[CanonFile]
+    val runtimeDeps = new mutable.HashSet[CanonFile]
+    val compileDeps = new mutable.HashSet[CanonFile]
+    val classDirs = new mutable.HashSet[CanonFile]
+    var target: Option[CanonFile] = None
+    var projectName: Option[String] = None
+
+    m.get("use-sbt") match {
+      case Some(JInt(_)) => {
+	val depDirs = m.get("sbt-subproject-dependencies") match {
+	  case Some(deps:List[String]) => deps.map(_.asInstanceOf[String])
+	  case _ => List[String]()
+	}
+        println("Using sbt configuration..")
+        val ext = getSbtConfig(rootDir, depDirs)
+        projectName = ext.projectName
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        target = ext.target
+      }
+      case _ =>
+    }
+
+    m.get("use-maven") match {
+      case Some(JInt(_)) => {
+        println("Using maven configuration..")
+        val ext = getMavenConfig(rootDir)
+        projectName = ext.projectName
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        target = ext.target
+      }
+      case _ =>
+    }
+
+    m.get("use-ivy") match {
+      case Some(JInt(_)) => {
+        println("Using ivy configuration..")
+        val rConf = m.get("ivy-runtime-conf").map(_.toString)
+        val cConf = m.get("ivy-compile-conf").map(_.toString)
+        val tConf = m.get("ivy-test-conf").map(_.toString)
+        val file = m.get("ivy-file").map(s => new File(s.toString))
+        val ext = getIvyConfig(rootDir, file, rConf, cConf, tConf)
+        sourceRoots ++= ext.sourceRoots
+        runtimeDeps ++= ext.runtimeDepJars
+        compileDeps ++= ext.compileDepJars
+        compileDeps ++= ext.testDepJars
+        target = ext.target
+      }
+      case _ =>
+    }
+
+    m.get("runtime-jars") match {
+      case Some(items:List[String]) => {
+        val jarsAndDirs = maybeFiles(items, rootDir)
+        val toInclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually including " + toInclude.size + " run-time jars.")
+        runtimeDeps ++= toInclude
+      }
+      case _ =>
+    }
+
+    m.get("exclude-runtime-jars") match {
+      case Some(items:List[String]) => {
+        val jarsAndDirs = maybeFiles(items, rootDir)
+        val toExclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually excluding " + toExclude.size + " run-time jars.")
+        runtimeDeps --= toExclude
+      }
+      case _ =>
+    }
+
+    m.get("compile-jars") match {
+      case Some(items:List[String]) => {
+        val jarsAndDirs = maybeFiles(items, rootDir)
+        val toInclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually including " + toInclude.size + " compile-time jars.")
+        compileDeps ++= toInclude
+      }
+      case _ =>
+    }
+
+    m.get("exclude-compile-jars") match {
+      case Some(items:List[String]) => {
+        val jarsAndDirs = maybeFiles(items, rootDir)
+        val toExclude = expandRecursively(rootDir, jarsAndDirs, isValidJar _)
+        println("Manually excluding " + toExclude.size + " compile-time jars.")
+        compileDeps --= toExclude
+      }
+      case _ =>
+    }
+
+    m.get("class-dirs") match {
+      case Some(items:List[String]) => {
+        val dirs = maybeDirs(items, rootDir)
+        println("Manually including " + dirs.size + " class directories.")
+        classDirs ++= expand(rootDir, dirs, isValidClassDir _)
+      }
+      case _ =>
+    }
+
+    m.get("sources") match {
+      case Some(items:List[String]) => {
+        val dirs = maybeDirs(items, rootDir)
+        println("Using source roots: " + dirs.mkString(", "))
+        sourceRoots ++= dirs
+      }
+      case _ =>
+    }
+
+    m.get("target") match {
+      case Some(StringAtom(targetDir)) => {
+        target = target.orElse(maybeDir(targetDir, rootDir))
+      }
+      case _ =>
+    }
+
+    projectName = projectName.orElse(m.get("project-name").map(_.asInstanceOf[String]))
+
+    val formatPrefs: Map[Symbol, Any] = m.get("formatting-prefs") match {
+      case Some(list: Map[String, Any]) => {
+        throw new Exception("TODO")
       }
       case _ => Map[Symbol, Any]()
     }

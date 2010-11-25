@@ -77,7 +77,7 @@ case class AddUndo(summary: String, changes: List[Change])
 case class Undo(id: Int, summary: String, changes: Iterable[Change])
 case class UndoResult(id: Int, touched: Iterable[File])
 
-class Project(val protocol: Protocol[SExp]) extends Actor with RPCTarget {
+class Project(val protocol: Protocol[_ >: net.liftweb.json.JsonAST.JValue with org.ensime.util.SExp <: ScalaObject]) extends Actor with RPCTarget {
 
   protocol.setRPCTarget(this)
 

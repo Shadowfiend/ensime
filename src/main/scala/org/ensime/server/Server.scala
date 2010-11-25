@@ -13,7 +13,13 @@ object Server {
       System.setProperty("actors.corePoolSize", "5")
       System.setProperty("actors.maxPoolSize", "10")
 
-      val protocol: Protocol[SExp] = SwankProtocol
+      val protocol = if (args.size > 1 && args(1) == "vim"){
+          println("using json protocol")
+          SwankJsonProtocol
+        } else {
+          println("using Emacs protocol")
+          SwankProtocol
+        }
 
       // TODO use a real cmdline parser here
       val portfile = args(0)

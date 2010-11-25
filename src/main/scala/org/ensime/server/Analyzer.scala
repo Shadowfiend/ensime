@@ -17,7 +17,7 @@ import scala.tools.nsc.util.{ OffsetPosition }
 case class FullTypeCheckCompleteEvent()
 case class CompilerFatalError(e: Throwable)
 
-class Analyzer(val project: Project, val protocol: ProtocolConversions[SExp], val config: ProjectConfig)
+class Analyzer(val project: Project, val protocol: ProtocolConversions[_ >: net.liftweb.json.JsonAST.JValue with org.ensime.util.SExp <: ScalaObject], val config: ProjectConfig)
   extends Actor with RefactoringController {
 
   private val settings = new Settings(Console.println)
