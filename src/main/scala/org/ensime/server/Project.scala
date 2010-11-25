@@ -5,14 +5,50 @@ import org.ensime.config.ProjectConfig
 import org.ensime.debug.ProjectDebugInfo
 import org.ensime.protocol._
 import org.ensime.util._
+import org.ensime.model._
+import org.ensime.config._
+import org.ensime.debug._
 import scala.actors._
 import scala.actors.Actor._
 import scala.tools.nsc.{ Settings }
 import scala.tools.refactoring.common.Change
 import scala.collection.mutable.{ LinkedHashMap }
 
+// these case clases represent return the set of data types returned to the
+// client. See Protocol implementations to find out how they are encoded
+abstract sealed class RPCResult
+case object RPCResultNull extends RPCResult
+case class RPCResultAny(any:Any) extends RPCResult
+case class RPCResultNoteList(nl:NoteList) extends RPCResult
+case class RPCResultNote(note:Note) extends RPCResult
+case class RPCResultNamedTypeMemberInfo(namedTypeMember:NamedTypeMemberInfoLight) extends RPCResult
+case class RPCResultSymbolInfoLight(l: SymbolInfoLight) extends RPCResult
+case class RPCResultSymbolInfo(l: SymbolInfo) extends RPCResult
+case class RPCResultPackageInfo(l: PackageInfo) extends RPCResult
+case class RPCResultPackageMemberInfoLight(i: PackageMemberInfoLight) extends RPCResult
+case class RPCResultTypeInfo(i: TypeInfo) extends RPCResult
+case class RPCResultCallCompletionInfo(i: CallCompletionInfo) extends RPCResult
+case class RPCResultIterable(l: Iterable[RPCResult]) extends RPCResult
+case class RPCResultImportSuggestions(l: ImportSuggestions) extends RPCResult
+case class RPCResultBool(b: Boolean) extends RPCResult
+case class RPCResultTypeInspectInfo(t: TypeInspectInfo) extends RPCResult
+case class RPCResultRefactorFailure(b: RefactorFailure) extends RPCResult
+case class RPCResultRefactorResult(b: RefactorResult) extends RPCResult
+case class RPCResultProjectConfig(c: ProjectConfig) extends RPCResult
+case class RPCResultUndo(c: Undo) extends RPCResult
+case class RPCResultUndoResult(c: UndoResult) extends RPCResult
+case class RPCResultReplConfig(c: ReplConfig) extends RPCResult
+case class RPCResultDebugConfig(c: DebugConfig) extends RPCResult
+case class RPCResultString(c: String) extends RPCResult
+case class RPCResultDebugUnit(d: DebugUnit) extends RPCResult
+case class RPCResultDebugSourceLinePairs(p: DebugSourceLinePairs) extends RPCResult
+case object RPCResultConnectionInfo extends RPCResult // details see Protocol implementatiotions
+
+// case class RPCResultEither(e: Either[RPCResult, RPCResult]) extends RPCResult
+
+
 case class SendBackgroundMessageEvent(code: Int, detail: Option[String])
-case class RPCResultEvent(value: WireFormat, callId: Int)
+case class RPCResultEvent(value: RPCResult, callId: Int)
 case class RPCErrorEvent(code: Int, detail: Option[String], callId: Int)
 case class RPCRequestEvent(req: Any, callId: Int)
 
@@ -41,7 +77,7 @@ case class AddUndo(summary: String, changes: List[Change])
 case class Undo(id: Int, summary: String, changes: Iterable[Change])
 case class UndoResult(id: Int, touched: Iterable[File])
 
-class Project(val protocol: Protocol) extends Actor with RPCTarget {
+class Project(val protocol: Protocol[SExp]) extends Actor with RPCTarget {
 
   protocol.setRPCTarget(this)
 
@@ -61,8 +97,8 @@ class Project(val protocol: Protocol) extends Actor with RPCTarget {
           case SendBackgroundMessageEvent(code: Int, detail: Option[String]) => {
             protocol.sendBackgroundMessage(code, detail)
           }
-          case IncomingMessageEvent(msg: WireFormat) => {
-            protocol.handleIncomingMessage(msg)
+          case IncomingMessageEvent(msg: Any) => {
+            protocol.handleIncomingMessageAny(msg)
           }
           case msg: AnalyzerReadyEvent => {
             protocol.sendCompilerReady

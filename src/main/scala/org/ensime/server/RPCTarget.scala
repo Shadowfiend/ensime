@@ -5,6 +5,7 @@ import org.ensime.debug.ProjectDebugInfo
 import org.ensime.model._
 import org.ensime.protocol.ProtocolConst._
 import org.ensime.util._
+import org.ensime.debug._
 import scala.actors._
 import scala.actors.Actor._
 import scala.collection.immutable
@@ -19,30 +20,30 @@ trait RPCTarget { self: Project =>
 
   def rpcInitProject(conf: ProjectConfig, callId: Int) {
     initProject(conf)
-    sendRPCReturn(toWF(conf), callId)
+    sendRPCReturn(RPCResultProjectConfig(conf), callId)
   }
 
   def rpcPeekUndo(callId: Int) {
     peekUndo match {
-      case Right(result) => sendRPCReturn(toWF(result), callId)
+      case Right(result:Undo) => sendRPCReturn(RPCResultUndo(result), callId)
       case Left(msg) => sendRPCError(ErrPeekUndoFailed, Some(msg), callId)
     }
   }
 
   def rpcExecUndo(undoId: Int, callId: Int) {
     execUndo(undoId) match {
-      case Right(result) => sendRPCReturn(toWF(result), callId)
+      case Right(result:UndoResult) => sendRPCReturn(RPCResultUndoResult(result), callId)
       case Left(msg) => sendRPCError(ErrExecUndoFailed, Some(msg), callId)
     }
   }
 
   def rpcReplConfig(callId: Int) {
-    sendRPCReturn(toWF(this.config.replConfig), callId)
+    sendRPCReturn(RPCResultReplConfig(this.config.replConfig), callId)
   }
 
   def rpcDebugConfig(callId: Int) {
     debugInfo = Some(new ProjectDebugInfo(config))
-    sendRPCReturn(toWF(this.config.debugConfig), callId)
+    sendRPCReturn(RPCResultDebugConfig(this.config.debugConfig), callId)
   }
 
   def rpcBuilderInit(callId: Int) {
@@ -73,11 +74,11 @@ trait RPCTarget { self: Project =>
     debugInfo = Some(info)
     val unit = info.findUnit(sourceName, line, packPrefix)
     unit match {
-      case Some(unit) => {
-        sendRPCReturn(toWF(unit), callId)
+      case Some(unit:DebugUnit) => {
+        sendRPCReturn(RPCResultDebugUnit(unit), callId)
       }
       case None => {
-        sendRPCReturn(toWF(false), callId)
+        sendRPCReturn(RPCResultBool(false), callId)
       }
     }
   }
@@ -86,7 +87,7 @@ trait RPCTarget { self: Project =>
     val info = debugInfo.getOrElse(new ProjectDebugInfo(config))
     debugInfo = Some(info)
     sendRPCReturn(
-      toWF(info.debugClassLocsToSourceLocs(pairs)),
+      RPCResultDebugSourceLinePairs(info.debugClassLocsToSourceLocs(pairs)),
       callId)
   }
 

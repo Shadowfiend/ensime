@@ -35,7 +35,7 @@ object ProtocolConst {
 
 }
 
-trait Protocol extends ProtocolConversions {
+trait Protocol[MsgType] extends ProtocolConversions[MsgType] {
 
   /**
    * Read a message from the socket.
@@ -43,7 +43,7 @@ trait Protocol extends ProtocolConversions {
    * @param  reader  The reader from which to read the message.
    * @return         The message, in the intermediate format.
    */
-  def readMessage(reader: Reader): WireFormat
+  def readMessage(reader: Reader): MsgType
 
   /**
    * Write a message to the socket.
@@ -52,7 +52,7 @@ trait Protocol extends ProtocolConversions {
    * @param  writer The writer to which to write the message.
    * @return        Void
    */
-  def writeMessage(value: WireFormat, writer: Writer)
+  def writeMessage(value: MsgType, writer: Writer)
 
   /**
    * Send a message in wire format to the client. Message
@@ -62,7 +62,7 @@ trait Protocol extends ProtocolConversions {
    * @param  o  The message to send.
    * @return    Void
    */
-  def sendMessage(o: WireFormat) {
+  def sendMessage(o: MsgType) {
     peer ! OutgoingMessageEvent(o)
   }
 
@@ -74,7 +74,15 @@ trait Protocol extends ProtocolConversions {
    * @param  msg  The message we've received.
    * @return        Void
    */
-  def handleIncomingMessage(msg: Any)
+  def handleIncomingMessage(msg: MsgType)
+
+  // this type unsafe helper function is used in Project Actor loop only
+  def handleIncomingMessageAny(msg: Any){
+    msg match {
+      case m:MsgType => handleIncomingMessage(m)
+      case _ => throw new Exception("failure") // should never be reached
+    }
+  }
 
   /**
    * Send a string to the client editor, to be displayed 
@@ -124,7 +132,7 @@ trait Protocol extends ProtocolConversions {
    * @param  callId The id of the RPC call.
    * @return        Void
    */
-  def sendRPCReturn(value: WireFormat, callId: Int)
+  def sendRPCReturn(value: RPCResult, callId: Int)
 
   /**
    * Notify the client that the RPC call could not
@@ -175,36 +183,40 @@ trait Protocol extends ProtocolConversions {
    */
   def sendTypeCheckResult(notes: NoteList)
 
+  def createSocketHandler(socket: java.net.Socket, project: Project) = {
+     new SocketHandler(socket, this, project)
+  }
+
 }
 
-trait ProtocolConversions {
-  def toWF(config: ProjectConfig): WireFormat
-  def toWF(config: ReplConfig): WireFormat
-  def toWF(config: DebugConfig): WireFormat
-  def toWF(unit: DebugUnit): WireFormat
-  def toWF(value: Boolean): WireFormat
-  def toWF(value: DebugSourceLinePairs): WireFormat
-  def toWF(value: Note): WireFormat
-  def toWF(notelist: NoteList): WireFormat;
-  def toWF(values: Iterable[WireFormat]): WireFormat
-  def toWF(value: SymbolInfoLight): WireFormat
-  def toWF(value: PackageMemberInfoLight): WireFormat
-  def toWF(value: SymbolInfo): WireFormat
-  def toWF(value: NamedTypeMemberInfoLight): WireFormat
-  def toWF(value: NamedTypeMemberInfo): WireFormat
-  def toWF(value: EntityInfo): WireFormat
-  def toWF(value: TypeInfo): WireFormat
-  def toWF(value: PackageInfo): WireFormat
-  def toWF(value: CallCompletionInfo): WireFormat
-  def toWF(value: InterfaceInfo): WireFormat
-  def toWF(value: TypeInspectInfo): WireFormat
-  def toWF(value: ImportSuggestions): WireFormat
+trait ProtocolConversions[MsgType] {
+  def toWF(config: ProjectConfig): MsgType
+  def toWF(config: ReplConfig): MsgType
+  def toWF(config: DebugConfig): MsgType
+  def toWF(unit: DebugUnit): MsgType
+  def toWF(value: Boolean): MsgType
+  def toWF(value: DebugSourceLinePairs): MsgType
+  def toWF(value: Note): MsgType
+  def toWF(notelist: NoteList): MsgType;
+  def toWF(values: Iterable[MsgType]): MsgType
+  def toWF(value: SymbolInfoLight): MsgType
+  def toWF(value: PackageMemberInfoLight): MsgType
+  def toWF(value: SymbolInfo): MsgType
+  def toWF(value: NamedTypeMemberInfoLight): MsgType
+  def toWF(value: NamedTypeMemberInfo): MsgType
+  def toWF(value: EntityInfo): MsgType
+  def toWF(value: TypeInfo): MsgType
+  def toWF(value: PackageInfo): MsgType
+  def toWF(value: CallCompletionInfo): MsgType
+  def toWF(value: InterfaceInfo): MsgType
+  def toWF(value: TypeInspectInfo): MsgType
+  def toWF(value: ImportSuggestions): MsgType
 
-  def toWF(value: RefactorFailure): WireFormat
-  def toWF(value: RefactorEffect): WireFormat
-  def toWF(value: RefactorResult): WireFormat
-  def toWF(value: Undo): WireFormat
-  def toWF(value: UndoResult): WireFormat
-  def toWF(value: Null): WireFormat
+  def toWF(value: RefactorFailure): MsgType
+  def toWF(value: RefactorEffect): MsgType
+  def toWF(value: RefactorResult): MsgType
+  def toWF(value: Undo): MsgType
+  def toWF(value: UndoResult): MsgType
+  def toWF(value: Null): MsgType
 
 }

@@ -3,7 +3,7 @@ package org.ensime.server
 import java.io._
 import java.net.{ ServerSocket, Socket }
 import org.ensime.protocol._
-import org.ensime.util.WireFormat
+import org.ensime.util.SExp
 import scala.actors._
 import scala.actors.Actor._
 
@@ -13,7 +13,7 @@ object Server {
       System.setProperty("actors.corePoolSize", "5")
       System.setProperty("actors.maxPoolSize", "10")
 
-      val protocol: Protocol = SwankProtocol
+      val protocol: Protocol[SExp] = SwankProtocol
 
       // TODO use a real cmdline parser here
       val portfile = args(0)
@@ -30,7 +30,7 @@ object Server {
         try {
           val socket = listener.accept()
           println("Got connection, creating handler...")
-          val handler = new SocketHandler(socket, protocol, project)
+          val handler = protocol.createSocketHandler(socket, project)
           handler.start()
         } catch {
           case e: IOException =>
@@ -69,16 +69,17 @@ object Server {
 
 }
 
-class SocketHandler(socket: Socket, protocol: Protocol, project: Project) extends Actor {
+// MsgType is either SExp or JValue
+class SocketHandler[MsgType](socket: Socket, protocol: Protocol[MsgType], project: Project) extends Actor {
   protocol.setOutputActor(this)
 
-  class SocketReader(socket: Socket, handler: SocketHandler) extends Actor {
+  class SocketReader[MsgType](socket: Socket, handler: SocketHandler[MsgType]) extends Actor {
     val in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
     def act() {
       var running = true
       try {
         while (running) {
-          val msg: WireFormat = protocol.readMessage(in)
+          val msg: Any = protocol.readMessage(in)
           handler ! IncomingMessageEvent(msg)
         }
       } catch {
@@ -93,7 +94,7 @@ class SocketHandler(socket: Socket, protocol: Protocol, project: Project) extend
 
   val out = new BufferedWriter(new OutputStreamWriter(socket.getOutputStream()));
 
-  def write(value: WireFormat) {
+  def write(value: MsgType) {
     try {
       protocol.writeMessage(value, out)
     } catch {
@@ -106,18 +107,18 @@ class SocketHandler(socket: Socket, protocol: Protocol, project: Project) extend
   }
 
   def act() {
-    val reader: SocketReader = new SocketReader(socket, this)
+    val reader: SocketReader[MsgType] = new SocketReader[MsgType](socket, this)
     this.link(reader)
     reader.start()
     loop {
       receive {
-        case IncomingMessageEvent(value: WireFormat) => {
+        case IncomingMessageEvent(value: MsgType) => {
           project ! IncomingMessageEvent(value)
         }
-        case OutgoingMessageEvent(value: WireFormat) => {
+        case OutgoingMessageEvent(value: MsgType) => {
           write(value)
         }
-        case Exit(_: SocketReader, reason) => exit(reason)
+        case Exit(_: SocketReader[MsgType], reason) => exit(reason)
       }
     }
   }

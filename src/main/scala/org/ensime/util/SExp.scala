@@ -3,9 +3,9 @@ import scala.collection.immutable.Map
 import scala.util.parsing.combinator._
 import scala.util.parsing.input._
 
-abstract class SExp extends WireFormat {
+abstract class SExp {
   def toReadableString: String = toString
-  override def toWireString: String = toReadableString
+  def toWireString: String = toReadableString
   def toScala: Any = toString
 }
 

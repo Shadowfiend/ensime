@@ -25,7 +25,7 @@ case class AddSourceFilesReq(files: Iterable[File])
 case class RemoveSourceFilesReq(files: Iterable[File])
 case class UpdateSourceFilesReq(files: Iterable[File])
 
-class IncrementalBuilder(project: Project, protocol: ProtocolConversions, config: ProjectConfig) extends Actor {
+class IncrementalBuilder(project: Project, protocol: ProtocolConversions[SExp], config: ProjectConfig) extends Actor {
 
   class IncrementalBuildManager(settings: Settings, reporter: Reporter)
   extends RefinedBuildManager(settings) {
@@ -73,28 +73,28 @@ class IncrementalBuilder(project: Project, protocol: ProtocolConversions, config
                   bm.addSourceFiles(files)
                   project ! SendBackgroundMessageEvent(
 		    MsgBuildComplete, Some("Build complete."))
-                  val result = toWF(reporter.allNotes.map(toWF))
+                  val result = RPCResultIterable(reporter.allNotes.map(RPCResultNote))
                   project ! RPCResultEvent(result, callId)
                 }
                 case AddSourceFilesReq(files: Iterable[File]) => {
                   val fileSet = files.map(AbstractFile.getFile(_)).toSet
                   bm.addSourceFiles(fileSet)
-                  val result = toWF(reporter.allNotes.map(toWF))
+                  val result = RPCResultIterable(reporter.allNotes.map(RPCResultNote))
                   project ! RPCResultEvent(result, callId)
                 }
                 case RemoveSourceFilesReq(files: Iterable[File]) => {
                   val fileSet = files.map(AbstractFile.getFile(_)).toSet
-                  project ! RPCResultEvent(toWF(true), callId)
+                  project ! RPCResultEvent(RPCResultBool(true), callId)
                   reporter.reset
                   bm.removeFiles(fileSet)
-                  val result = toWF(reporter.allNotes.map(toWF))
+                  val result = RPCResultIterable(reporter.allNotes.map(RPCResultNote))
                   project ! RPCResultEvent(result, callId)
                 }
                 case UpdateSourceFilesReq(files: Iterable[File]) => {
                   val fileSet = files.map(AbstractFile.getFile(_)).toSet
                   reporter.reset
                   bm.update(fileSet, Set())
-                  val result = toWF(reporter.allNotes.map(toWF))
+                  val result = RPCResultIterable(reporter.allNotes.map(RPCResultNote))
                   project ! RPCResultEvent(result, callId)
                 }
 

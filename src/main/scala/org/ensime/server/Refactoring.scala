@@ -63,9 +63,9 @@ trait RefactoringController { self: Analyzer =>
     result match {
       case Right(effect) => {
         effects(procedureId) = effect
-        project ! RPCResultEvent(toWF(effect), callId)
+        project ! RPCResultEvent(RPCResultAny(effect), callId)
       }
-      case Left(f) => project ! RPCResultEvent(toWF(f), callId)
+      case Left(f) => project ! RPCResultEvent(RPCResultAny(f), callId)
     }
   }
 
@@ -79,22 +79,22 @@ trait RefactoringController { self: Analyzer =>
 	val result = scalaCompiler.askExecRefactor(procedureId, req.refactorType, effect)
 	result match {
 	  case Right(result) => {
-	    project ! RPCResultEvent(toWF(result), callId)
+	    project ! RPCResultEvent(RPCResultRefactorResult(result), callId)
 	  }
-	  case Left(f) => project ! RPCResultEvent(toWF(f), callId)
+	  case Left(f) => project ! RPCResultEvent(RPCResultRefactorFailure(f), callId)
 	}
       }
       case None => {
 	val f = RefactorFailure(procedureId, 
 	  "No effect found for procId " + procedureId)
-	project ! RPCResultEvent(toWF(f), callId)
+	project ! RPCResultEvent(RPCResultRefactorFailure(f), callId)
       }
     }
   }
 
   def handleRefactorCancel(req: RefactorCancelReq, callId: Int) {
     effects.remove(req.procedureId)
-    project ! RPCResultEvent(toWF(true), callId)
+    project ! RPCResultEvent(RPCResultBool(true), callId)
   }
 
 }

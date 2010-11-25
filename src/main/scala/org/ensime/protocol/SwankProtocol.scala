@@ -14,7 +14,7 @@ import scala.util.parsing.input
 
 object SwankProtocol extends SwankProtocol {}
 
-trait SwankProtocol extends Protocol {
+trait SwankProtocol extends Protocol[SExp] {
 
   import SwankProtocol._
   import ProtocolConst._
@@ -34,7 +34,7 @@ trait SwankProtocol extends Protocol {
 
   // Handle reading / writing of messages
 
-  def writeMessage(value: WireFormat, out: Writer) {
+  def writeMessage(value: SExp, out: Writer) {
     val data: String = value.toWireString
     val header: String = String.format("%06x", int2Integer(data.length))
     val msg = header + data
@@ -59,7 +59,7 @@ trait SwankProtocol extends Protocol {
 
   private val headerBuf = new Array[Char](6);
 
-  def readMessage(in: java.io.Reader): WireFormat = {
+  def readMessage(in: java.io.Reader): SExp = {
     fillArray(in, headerBuf)
     val msglen = Integer.valueOf(new String(headerBuf), 16).intValue()
     if (msglen > 0) {
@@ -79,7 +79,7 @@ trait SwankProtocol extends Protocol {
       detail.map(strToSExp).getOrElse(NilAtom())))
   }
 
-  def handleIncomingMessage(msg: Any) {
+  def handleIncomingMessage(msg: SExp) {
     msg match {
       case sexp: SExp => handleMessageForm(sexp)
       case _ => System.err.println("WTF: Unexpected message: " + msg)
@@ -382,20 +382,53 @@ trait SwankProtocol extends Protocol {
   }
 
   def sendRPCAckOK(callId: Int) {
-    sendRPCReturn(true, callId)
+    sendRPCReturn(RPCResultBool(true), callId)
   }
 
-  def sendRPCReturn(value: WireFormat, callId: Int) {
+  def toWF(value :RPCResult):SExp = {
     value match {
-      case sexp: SExp =>
-        {
-          sendMessage(SExp(
-            key(":return"),
-            SExp(key(":ok"), sexp),
-            callId))
-        }
-      case _ => throw new IllegalStateException("Not a SExp: " + value)
+      case RPCResultNull => toWF(null)
+      case RPCResultAny(any:Any) => throw new Exception("TODO")
+      case RPCResultNoteList(nl:NoteList) => toWF(nl)
+      case RPCResultNote(note:Note) => throw new Exception("not used")
+      case RPCResultNamedTypeMemberInfo(namedTypeMember:NamedTypeMemberInfoLight) => toWF(namedTypeMember)
+      case RPCResultSymbolInfoLight(l: SymbolInfoLight) => toWF(l)
+      case RPCResultSymbolInfo(l: SymbolInfo) => toWF(l)
+      case RPCResultPackageInfo(l: PackageInfo) => toWF(l)
+      case RPCResultPackageMemberInfoLight(i: PackageMemberInfoLight) => toWF(i)
+      case RPCResultTypeInfo(i: TypeInfo) => toWF(i)
+      case RPCResultCallCompletionInfo(i: CallCompletionInfo) => toWF(i)
+      case RPCResultIterable(l: Iterable[RPCResult]) => toWF(l.map(toWF(_)))
+      case RPCResultImportSuggestions(l: ImportSuggestions) => toWF(l)
+      case RPCResultBool(b: Boolean) => toWF(b)
+      case RPCResultTypeInspectInfo(t: TypeInspectInfo) => toWF(t)
+      case RPCResultRefactorFailure(b: RefactorFailure) => toWF(b)
+      case RPCResultRefactorResult(b: RefactorResult) => toWF(b)
+      case RPCResultProjectConfig(c: ProjectConfig) => toWF(c)
+      case RPCResultUndo(c: Undo) => toWF(c)
+      case RPCResultUndoResult(c: UndoResult) => toWF(c)
+      case RPCResultReplConfig(c: ReplConfig) => toWF(c)
+      case RPCResultDebugConfig(c: DebugConfig) => toWF(c)
+      case RPCResultString(c: String) => toWF(c)
+      case RPCResultDebugUnit(d: DebugUnit) => toWF(d)
+      case RPCResultDebugSourceLinePairs(p: DebugSourceLinePairs) => toWF(p)
+      case RPCResultConnectionInfo =>
+          SExp(
+                key(":pid"), 'nil,
+                key(":server-implementation"),
+                SExp(
+                  key(":name"), SERVER_NAME),
+                key(":machine"), 'nil,
+                key(":features"), 'nil,
+                key(":version"), PROTOCOL_VERSION)
     }
+  }
+
+  def sendRPCReturn(value: RPCResult, callId: Int) {
+    sendMessage(SExp(
+      key(":return"),
+      SExp(key(":ok"), toWF(value)),
+      callId))
   }
 
   def sendRPCError(code: Int, detail: Option[String], callId: Int) {
@@ -419,15 +452,7 @@ trait SwankProtocol extends Protocol {
   * A sexp describing the server configuration, per the Swank standard.
   */
   def sendConnectionInfo(callId: Int) = {
-    val info = SExp(
-      key(":pid"), 'nil,
-      key(":server-implementation"),
-      SExp(
-        key(":name"), SERVER_NAME),
-      key(":machine"), 'nil,
-      key(":features"), 'nil,
-      key(":version"), PROTOCOL_VERSION)
-    sendRPCReturn(info, callId)
+    sendRPCReturn(RPCResultConnectionInfo, callId)
   }
 
   def sendCompilerReady() = sendMessage(SExp(key(":compiler-ready"), true))
@@ -512,7 +537,7 @@ trait SwankProtocol extends Protocol {
       SExpList(notes.map(toWF)))
   }
 
-  def toWF(values: Iterable[WireFormat]): SExp = {
+  def toWF(values: Iterable[SExp]): SExp = {
     SExpList(values.map(ea => ea.asInstanceOf[SExp]))
   }
 
