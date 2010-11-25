@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -f
 
 case "$1" in
@@ -14,4 +14,6 @@ esac
 INITIAL_HEAP=256M
 MAX_HEAP=1024M
 CLASSPATH=<RUNTIME_CLASSPATH>
-java -classpath $CLASSPATH -Xms${INITIAL_HEAP} -Xmx${MAX_HEAP} org.ensime.server.Server $PORT_FILE
+# CLASSPATH is relative to dist directory. So cd into that directory before running java:
+cd "$(dirname "$(dirname "$0")")"
+java -classpath $CLASSPATH -Xms${INITIAL_HEAP} -Xmx${MAX_HEAP} org.ensime.server.Server "$@"
