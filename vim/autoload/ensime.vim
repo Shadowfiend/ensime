@@ -298,7 +298,7 @@ fun! ensime#Completion(findstart, base)
     " and use camel case matching .. The one char is necessary to keep the
     " returned list of matches small. Else filtering could be too slow
     " foo. the bytepos must be the last o (?)
-    let b:bytePos = b:realBytePos - (len(s:match_text) > 0 ? len(s:match_text) - 1 : 0) - (b:completion_type == 'type' ? 1 : 0)
+    let b:bytePos = b:realBytePos - (len(s:match_text) > 0 ? len(s:match_text) - 1 : 0) - (b:completion_type == 'type' ? 2 : 0)
     return s:start
   else
     if exists('s:c.con.completions')

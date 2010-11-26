@@ -10,6 +10,7 @@
     "vim-addon-completion": {},
     "vim-addon-json-encoding": {},
     "vim-addon-signs": {},
+    "vim-addon-mw-utils": {},
   },
   "description" : "Branch making Vim talk to Ensime. Original repository is at http://github.com/aemoncannon. I hope that the changes will be merged upstream when they are more stable"
 }
