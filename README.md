@@ -120,3 +120,8 @@ You only need to do this once per project.
 
   Additionally you have to run sbt dist (in the ensime directory) and compile
   the .c app in C/ in vim-addon-async.
+
+## VIM TODO
+  the inspection view is poor. You can't follow items by id (sorry, use Emacs for now)
+  you can't debug yet (dito)
+  ... Probably there is much more I've been missing

@@ -346,19 +346,39 @@ endfun
 " this seems to be a nice way to view data to the user temporarely which does
 " not cause segfaults too often:
 fun! ensime#Preview(s)
-    if !exists('s:ped_file')
-      let s:ped_file = tempname()
-    endif
-    call writefile(a:s, s:ped_file)
-    exec 'ped 'fnameescape(s:ped_file)
+  if !exists('s:ped_file')
+    let s:ped_file = tempname()
+  endif
+  call writefile(a:s, s:ped_file)
+  exec 'ped 'fnameescape(s:ped_file)
 endf
 
 fun! ensime#TypeAtCursor(act, data)
   let s:c.con.actions[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = [function('ensime#SymbolAtPointAction'), [act]]
 endf
 
+fun! ensime#FormatInspectionResult(thing, indentation, typehint) abort
+  echo string(a:thing)
+  if (type(a:thing) == type({})) && has_key(a:thing, "interfaces") && len(keys(a:thing)) ==1
+    return "interfaces: \n".join(map(copy(a:thing.interfaces),'ensime#FormatInspectionResult(v:val, a:indentation."  ", "interface")'),"\n")
+  elseif a:typehint == "interface"
+    " .ensime#FormatInspectionResult(a:thing.type['type-args'],"",'type-args')
+    return a:indentation. a:thing.type['full-name'] .' '
+      \    ."\n".join(map( copy(a:thing.type.members), 'ensime#FormatInspectionResult(v:val, a:indentation."  ", "member")'),"\n")."\n"
+
+  elseif a:typehint == "typeargs"
+    return string(a:thing)
+  elseif a:typehint == "member"
+    return a:indentation . a:thing.name .' '. a:thing.type.name
+    " {'name': 'backup', 'decl-as': 'method', 'type': {'arrow-type': 1, 'name': '(x$1: java.lang.String)Unit', 'result-type': {'outer-type-id': 0, 'full-name': 'scala.Unit', 'type-args': [], 'name': 'Unit', 'type-id': 3, 'decl-as': 'class', 'pos': 0, 'members': []}, 'type-id': 2, 'param-sections': [{'is-implicit': 0, 'params': [['x$1', {'outer-type-id': 0, 'full-name': 'java.lang.String', 'type-args': [], 'name': 'String', 'type-id': 1, 'decl-as': 'class', 'pos': 0, 'members': []}]]}]}, 'pos': 0}
+  else
+    return "uhandled case ".string(a:thing)
+  end
+endf
+
 fun! ensime#InspectAtCursorAction(data)
-  call ensime#Preview(string(a:data))
+  let s = split(ensime#FormatInspectionResult(a:data, "", ""),"\n")
+  call ensime#Preview(s)
 endf
 
 fun! ensime#InspectAtCursor()
