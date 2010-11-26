@@ -388,7 +388,6 @@ trait SwankProtocol extends Protocol[SExp] {
   def toWF(value :RPCResult):SExp = {
     value match {
       case RPCResultNull => toWF(null)
-      case RPCResultAny(any:Any) => throw new Exception("TODO")
       case RPCResultNoteList(nl:NoteList) => toWF(nl)
       case RPCResultNote(note:Note) => throw new Exception("not used")
       case RPCResultNamedTypeMemberInfo(namedTypeMember:NamedTypeMemberInfoLight) => toWF(namedTypeMember)
@@ -402,6 +401,7 @@ trait SwankProtocol extends Protocol[SExp] {
       case RPCResultImportSuggestions(l: ImportSuggestions) => toWF(l)
       case RPCResultBool(b: Boolean) => toWF(b)
       case RPCResultTypeInspectInfo(t: TypeInspectInfo) => toWF(t)
+      case RPCResultRefactorEffect(effect:RefactorEffect) => toWF(effect)
       case RPCResultRefactorFailure(b: RefactorFailure) => toWF(b)
       case RPCResultRefactorResult(b: RefactorResult) => toWF(b)
       case RPCResultProjectConfig(c: ProjectConfig) => toWF(c)

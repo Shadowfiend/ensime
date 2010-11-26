@@ -63,9 +63,9 @@ trait RefactoringController { self: Analyzer =>
     result match {
       case Right(effect) => {
         effects(procedureId) = effect
-        project ! RPCResultEvent(RPCResultAny(effect), callId)
+        project ! RPCResultEvent(RPCResultRefactorEffect(effect), callId)
       }
-      case Left(f) => project ! RPCResultEvent(RPCResultAny(f), callId)
+      case Left(f) => project ! RPCResultEvent(RPCResultRefactorFailure(f), callId)
     }
   }
 

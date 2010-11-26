@@ -248,7 +248,6 @@ trait SwankJsonProtocol extends Protocol[JValue] {
   def toWF(value :RPCResult):JValue = {
     value match {
       case RPCResultNull =>  JInt(0) // Vim can't parse null
-      case RPCResultAny(any:Any) => throw new Exception("TODO")
       case RPCResultNoteList(nl:NoteList) => toWF(nl)
       case RPCResultNote(note:Note) => throw new Exception("not used")
       case RPCResultNamedTypeMemberInfo(namedTypeMember:NamedTypeMemberInfoLight) => toWF(namedTypeMember)
@@ -262,6 +261,7 @@ trait SwankJsonProtocol extends Protocol[JValue] {
       case RPCResultImportSuggestions(l: ImportSuggestions) => toWF(l)
       case RPCResultBool(b: Boolean) => toWF(b)
       case RPCResultTypeInspectInfo(t: TypeInspectInfo) => toWF(t)
+      case RPCResultRefactorEffect(b: RefactorEffect) => toWF(b)
       case RPCResultRefactorFailure(b: RefactorFailure) => toWF(b)
       case RPCResultRefactorResult(b: RefactorResult) => toWF(b)
       case RPCResultProjectConfig(c: ProjectConfig) => toWF(c)

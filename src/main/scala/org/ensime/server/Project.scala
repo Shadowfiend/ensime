@@ -18,7 +18,7 @@ import scala.collection.mutable.{ LinkedHashMap }
 // client. See Protocol implementations to find out how they are encoded
 abstract sealed class RPCResult
 case object RPCResultNull extends RPCResult
-case class RPCResultAny(any:Any) extends RPCResult
+case class RPCResultRefactorEffect(any:RefactorEffect) extends RPCResult
 case class RPCResultNoteList(nl:NoteList) extends RPCResult
 case class RPCResultNote(note:Note) extends RPCResult
 case class RPCResultNamedTypeMemberInfo(namedTypeMember:NamedTypeMemberInfoLight) extends RPCResult
