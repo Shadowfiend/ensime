@@ -52,7 +52,6 @@ fun! ensime#StartEnsimeServer()
 
   let s:c.con.ensime_server_process = ctx
 
-  let s:c.con.reformat_calls = {}
   let s:c.con.actions = {}
 
   " wait for pidfile
@@ -130,16 +129,6 @@ fun! ensime#Receive2(line, ...) dict
       call add(args[1], data)
       call call(function('call'), args)
       " unlet s:c.con.actions[callId]
-    elseif has_key(s:c.con.reformat_calls, get(reply,'callId',-2))
-      echo s:c.con.reformat_calls[reply.callId]
-      " reload formatted buffers
-      for f in s:c.con.reformat_calls[reply.callId]
-        let b = bufnr(f)
-        if b != -1
-          exec b.'b | e!'
-        endif
-      endfor
-      unlet s:c.con.reformat_calls[reply.callId]
     else
       call s:Log("don't know yet what do to with server result ".string(data))
     endif
@@ -317,9 +306,20 @@ fun! ensime#Completion(findstart, base)
   endif
 endf
 
+fun ensime#ReformatSourceAction(files, ...)
+  " reload formatted buffers
+  for f in a:files
+    let b = bufnr(f)
+    if b != -1
+      exec b.'b | e!'
+    endif
+  endfor
+endf
+
 fun! ensime#FormatSource(sources)
   " make paths absolute
-  let s:c.con.reformat_calls[ensime#Request(["swank:format-source"] + [map(a:sources, 'fnamemodify(v:val, ":p")')] )] = a:sources
+  let files = map(a:sources, 'fnamemodify(v:val, ":p")')
+  let s:c.con.actions[ensime#Request(["swank:format-source"] + [files] )] = [function('ensime#ReformatSourceAction'), [files]]
 endf
 
 fun! ensime#SymbolAtPointAction(act, data)
