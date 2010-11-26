@@ -103,6 +103,7 @@ You only need to do this once per project.
     - templates for .ensime files
     - ...
 
+## Vim installation
 
   Vim plugin dependencies:
 
@@ -110,6 +111,12 @@ You only need to do this once per project.
     vim-addon-completion
     vim-addon-json-encoding
 
-  I recommend using vim-addon-manager to install them. You can find the source locations here:
+  I recommend using vim-addon-manager to install ensime and its dependencies.
+  (Follow its documentation - or contact Marc Weber if you have any issues).
+
+  You can find the source locations here if you want to install them manually:
   http://github.com/MarcWeber/vim-addon-manager-known-repositories/raw/master/plugin/vim-addon-manager-known-repositories.vim
   Many thanks to the main author Aemon Cannon who always assisted this process.
+
+  Additionally you have to run sbt dist (in the ensime directory) and compile
+  the .c app in C/ in vim-addon-async.
