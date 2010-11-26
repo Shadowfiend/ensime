@@ -53,7 +53,7 @@ fun! ensime#StartEnsimeServer()
   let s:c.con.ensime_server_process = ctx
 
   let s:c.con.reformat_calls = {}
-  let s:c.con.typeAtCursorCalls = {}
+  let s:c.con.actions = {}
 
   " wait for pidfile
 endf
@@ -100,6 +100,8 @@ fun! ensime#Receive2(line, ...) dict
 
     let d = type(data) == type({})
 
+    let callId = get(reply,'callId',-2)
+
     if get(reply,'callId',-2) == get(get(s:c,'con',{}),'completion_call_id', -1)
       " waiting for completion result
       let s:c.con.completions = data
@@ -123,30 +125,11 @@ fun! ensime#Receive2(line, ...) dict
       call ensime#PopulateQuickFix(data.notes)
     elseif d && has_key(data, 'classpath')
       call async_porcelaine#ScalaBuffer({'cmd': 'scala -cp '.data.classpath,'move_last':1, 'prompt': 'scala> $'})
-    elseif has_key(s:c.con.typeAtCursorCalls, get(reply,'callId',-2))
-
-      if s:c.con.typeAtCursorCalls[reply.callId] == 'goto'
-        " goto type
-        " why does Vim switch syntax off??
-        call feedkeys(':e '.fnameescape(data['decl-pos'].file).'|goto '.data['decl-pos'].offset."|syn on\<cr>")
-      else
-        " show type info in preview window
-
-        " type at request:
-        " let s = ['arrow-type: '. data.type['arrow-type'] .' '. data.type.name, string(data['decl-pos'])]
-        let s = []
-        if exists('data.type["full-name"]')
-          call add(s, data.type["full-name"])
-        endif
-        call add(s, string(data))
-
-        if !exists('s:ped_file')
-          let s:ped_file = tempname()
-        endif
-        call writefile(s, s:ped_file)
-        exec 'ped 'fnameescape(s:ped_file)
-      endif
-      
+    elseif has_key(s:c.con.actions, callId)
+      let args = s:c.con.actions[callId]
+      call add(args[1], data)
+      call call(function('call'), args)
+      " unlet s:c.con.actions[callId]
     elseif has_key(s:c.con.reformat_calls, get(reply,'callId',-2))
       echo s:c.con.reformat_calls[reply.callId]
       " reload formatted buffers
@@ -339,6 +322,45 @@ fun! ensime#FormatSource(sources)
   let s:c.con.reformat_calls[ensime#Request(["swank:format-source"] + [map(a:sources, 'fnamemodify(v:val, ":p")')] )] = a:sources
 endf
 
-fun! ensime#TypeAtCursor(act)
-  let s:c.con.typeAtCursorCalls[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = a:act
+fun! ensime#SymbolAtPointAction(act, data)
+  let data = a:data
+  if act == 'goto'
+    " goto type
+    " why does Vim switch syntax off??
+    call feedkeys(':e '.fnameescape(data['decl-pos'].file).'|goto '.data['decl-pos'].offset."|syn on\<cr>")
+  else
+    " show type info in preview window
+
+    " type at request:
+    " let s = ['arrow-type: '. data.type['arrow-type'] .' '. data.type.name, string(data['decl-pos'])]
+    let s = []
+    if exists('data.type["full-name"]')
+      call add(s, data.type["full-name"])
+    endif
+    call add(s, string(data))
+
+    call ensime#Preview(s)
+  endif
+endfun
+
+" this seems to be a nice way to view data to the user temporarely which does
+" not cause segfaults too often:
+fun! ensime#Preview(s)
+    if !exists('s:ped_file')
+      let s:ped_file = tempname()
+    endif
+    call writefile(a:s, s:ped_file)
+    exec 'ped 'fnameescape(s:ped_file)
+endf
+
+fun! ensime#TypeAtCursor(act, data)
+  let s:c.con.actions[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = [function('ensime#SymbolAtPointAction'), [act]]
+endf
+
+fun! ensime#InspectAtCursorAction(data)
+  call ensime#Preview(string(a:data))
+endf
+
+fun! ensime#InspectAtCursor()
+  let s:c.con.actions[ensime#Request(['swank:inspect-type-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = [function('ensime#InspectAtCursorAction'), []]
 endf
