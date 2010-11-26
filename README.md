@@ -122,6 +122,6 @@ You only need to do this once per project.
   the .c app in C/ in vim-addon-async.
 
 ## VIM TODO
-  the inspection view is poor. You can't follow items by id (sorry, use Emacs for now)
+  the inspection view is poor. You can only follow types by :EnsimeInspectTypeById nr
   you can't debug yet (dito)
   ... Probably there is much more I've been missing

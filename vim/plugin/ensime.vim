@@ -7,6 +7,7 @@ command! -nargs=0 EnsimeConnectionInfo call ensime#Request(["swank:connection-in
 command! -nargs=0 EnsimeRepl call ensime#Request(["swank:repl-config"])
 command! -nargs=0 EnsimeTypeAtCursor call ensime#TypeAtCursor('')
 command! -nargs=0 EnsimeInspectAtCursor call ensime#InspectAtCursor()
+command! -nargs=1 EnsimeInspectTypeById call ensime#InspectTypeById(<f-args>)
 command! -nargs=0 EnsimeDefinition call ensime#TypeAtCursor('goto')
 command! -nargs=* -complete=file EnsimeFormatSource call ensime#FormatSource(empty([<f-args>]) ? [expand('%')] : [<f-args>] )
 

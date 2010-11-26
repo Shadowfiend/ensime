@@ -369,7 +369,7 @@ fun! ensime#FormatInspectionResult(thing, indentation, typehint) abort
   elseif a:typehint == "typeargs"
     return string(a:thing)
   elseif a:typehint == "member"
-    return a:indentation . a:thing.name .' '. a:thing.type.name
+    return a:indentation . a:thing.name .' '. a:thing.type.name.'  <'. a:thing.type['result-type']['type-id'].'>'
     " {'name': 'backup', 'decl-as': 'method', 'type': {'arrow-type': 1, 'name': '(x$1: java.lang.String)Unit', 'result-type': {'outer-type-id': 0, 'full-name': 'scala.Unit', 'type-args': [], 'name': 'Unit', 'type-id': 3, 'decl-as': 'class', 'pos': 0, 'members': []}, 'type-id': 2, 'param-sections': [{'is-implicit': 0, 'params': [['x$1', {'outer-type-id': 0, 'full-name': 'java.lang.String', 'type-args': [], 'name': 'String', 'type-id': 1, 'decl-as': 'class', 'pos': 0, 'members': []}]]}]}, 'pos': 0}
   else
     return "uhandled case ".string(a:thing)
@@ -379,6 +379,10 @@ endf
 fun! ensime#InspectAtCursorAction(data)
   let s = split(ensime#FormatInspectionResult(a:data, "", ""),"\n")
   call ensime#Preview(s)
+endf
+
+fun! ensime#InspectTypeById(id)
+  let s:c.con.actions[ensime#Request(['swank:inspect-type-by-id', 1*a:id])] = [function('ensime#InspectAtCursorAction'), []]
 endf
 
 fun! ensime#InspectAtCursor()
