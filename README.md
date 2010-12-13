@@ -87,7 +87,7 @@ You only need to do this once per project.
     commands:
       :Ensime                - start the server
       :EnsimeConnectionInfo  - should print some info
-      :EnsimeRepl            - read eval print loop
+      :EnsimeRepl            - read eval print loop (See documentation of vim-addon-async)
       :EnsimeReformatSources - reformat source file and reload it into Vim (vim 7.3 can undo reloading so no care has to be taken)
       :EnsimeDefinition       - goto definition (only if its found in source file for now)
       :EnsimeShowTypeAtCursor - show type under cursor in preview window
