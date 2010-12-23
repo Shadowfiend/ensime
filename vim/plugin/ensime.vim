@@ -1,5 +1,6 @@
 " exec scriptmanager#DefineAndBind('s:c','g:ensime','{}')
 if !exists('g:ensime') | let g:ensime = {} | endif | let s:c = g:ensime
+let s:c.ensime_map_leader = get(s:c, 'ensime_map_leader', '\')
 
 " start and connect to ensime server
 command! -nargs=0 Ensime call ensime#StartEnsimeServer()
