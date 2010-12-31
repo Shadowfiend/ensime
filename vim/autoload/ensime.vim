@@ -324,7 +324,7 @@ endf
 
 fun! ensime#SymbolAtPointAction(act, data)
   let data = a:data
-  if act == 'goto'
+  if a:act == 'goto'
     " goto type
     " why does Vim switch syntax off??
     call feedkeys(':e '.fnameescape(data['decl-pos'].file).'|goto '.data['decl-pos'].offset."|syn on\<cr>")
@@ -353,8 +353,8 @@ fun! ensime#Preview(s)
   exec 'ped 'fnameescape(s:ped_file)
 endf
 
-fun! ensime#TypeAtCursor(act, data)
-  let s:c.con.actions[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = [function('ensime#SymbolAtPointAction'), [act]]
+fun! ensime#TypeAtCursor(act)
+  let s:c.con.actions[ensime#Request(['swank:symbol-at-point', expand('%:p'), ensime#LocationOfCursor()[1]])] = [function('ensime#SymbolAtPointAction'), [a:act]]
 endf
 
 fun! ensime#FormatInspectionResult(thing, indentation, typehint) abort
